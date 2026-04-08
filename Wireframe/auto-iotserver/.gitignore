@@ -1,0 +1,41 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Archivos de instalación
+.install-state
+.config.env
+# Logs - ignorar contenido pero mantener carpeta vacía
+logs/*
+!logs/.gitkeep
+
+*.log
+
+# Secretos
+.secrets
+.iot-platform/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+env/
+
+# Docker
+.env
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Backups
+*.bak
+*.backup

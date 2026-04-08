@@ -1,0 +1,41 @@
+# Ignorar archivos del sistema operativo
+.DS_Store
+Thumbs.db
+
+# Ignorar directorios y archivos de node_modules
+node_modules
+npm-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# Ignorar archivos de configuración local
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# Ignorar archivos de caché
+.cache
+dist
+build
+
+# Ignorar archivos de versionamiento
+.git
+.gitignore
+
+# Ignorar IDE-specific files
+.vscode
+.idea
+
+# Ignorar logs y temporales
+*.log
+*.tmp
+*.swp
+
+# Ignorar archivos de pruebas
+coverage
+jest-coverage
+
+# Ignorar archivos específicos de Vite
+vite.config.ts.bak

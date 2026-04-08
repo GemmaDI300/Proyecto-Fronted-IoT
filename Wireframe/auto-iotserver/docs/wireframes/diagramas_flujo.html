@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT Platform - Diagramas de Flujo y Comunicación</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        :root { --primary:#2563eb; --gray-50:#f8fafc; --gray-100:#f1f5f9; --gray-200:#e2e8f0; --gray-700:#334155; --gray-800:#1e293b; --gray-900:#0f172a; }
+        body { font-family:'Segoe UI',system-ui,-apple-system,sans-serif; background:var(--gray-50); color:var(--gray-800); line-height:1.6; }
+        .header { background:white; border-bottom:1px solid var(--gray-200); padding:32px 48px; }
+        .header h1 { font-size:28px; font-weight:800; color:var(--gray-900); margin-bottom:4px; }
+        .header p { font-size:14px; color:#64748b; }
+        .container { max-width:1200px; margin:0 auto; padding:32px 48px; }
+        .diagram-section { background:white; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.08); border:1px solid var(--gray-100); margin-bottom:32px; overflow:hidden; }
+        .diagram-header { padding:24px 28px; border-bottom:1px solid var(--gray-100); }
+        .diagram-header h2 { font-size:18px; font-weight:700; color:var(--gray-900); margin-bottom:4px; }
+        .diagram-header p { font-size:13px; color:#64748b; }
+        .diagram-number { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; background:var(--primary); color:white; border-radius:8px; font-size:13px; font-weight:700; margin-right:10px; }
+        .diagram-body { padding:32px 28px; display:flex; justify-content:center; overflow-x:auto; }
+        .diagram-body .mermaid { max-width:100%; }
+        .toc { background:white; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.08); border:1px solid var(--gray-100); margin-bottom:32px; padding:24px 28px; }
+        .toc h3 { font-size:16px; font-weight:700; margin-bottom:12px; }
+        .toc ol { padding-left:20px; }
+        .toc li { margin-bottom:6px; }
+        .toc a { color:var(--primary); text-decoration:none; font-size:14px; }
+        .toc a:hover { text-decoration:underline; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>IoT Platform — Diagramas de Flujo y Comunicación</h1>
+        <p>Auto-IOTSERVER v1.1 · Arquitectura, Autenticación, RBAC y Flujo de Datos</p>
+    </div>
+    <div class="container">
+        <div class="toc">
+            <h3>Índice de Diagramas</h3>
+            <ol>
+                <li><a href="#d1">Diagrama de Comunicación del Sistema (Arquitectura general)</a></li>
+                <li><a href="#d2">Flujo de Autenticación de Usuarios (Argon2 + JWT + Redis)</a></li>
+                <li><a href="#d3">Flujo de Autenticación de Dispositivos (Puzzle Criptográfico AES-256)</a></li>
+                <li><a href="#d4">Flujo RBAC — Control de Acceso por Rol y Permiso</a></li>
+                <li><a href="#d5">Jerarquía de Roles y Acceso a Entidades</a></li>
+                <li><a href="#d6">Diagrama de Secuencia — Flujo Completo de Datos IoT</a></li>
+            </ol>
+        </div>
+
+        <!-- 1. SYSTEM COMMUNICATION -->
+        <div class="diagram-section" id="d1">
+            <div class="diagram-header"><h2><span class="diagram-number">1</span>Diagrama de Comunicación del Sistema</h2><p>Arquitectura de 5 capas de seguridad: nftables → fail2ban → Nginx → FastAPI → Docker aislamiento. 5 servicios Docker Compose.</p></div>
+            <div class="diagram-body">
+                <pre class="mermaid">
+flowchart LR
+    subgraph Internet
+        CL["🖥️ Cliente / Browser"]
+        DEV["📱 Dispositivo IoT"]
+    end
+
+    subgraph "Capa de Seguridad"
+        NFT["🔥 nftables\nFirewall L3/L4"]
+        F2B["🛡️ fail2ban\n5 jails activos"]
+        NGX["⚡ Nginx\nReverse Proxy\nRate Limit\nSSL/TLS"]
+    end
+
+    subgraph "Docker Compose (5 servicios)"
+        subgraph "Aplicación"
+            API["🐍 FastAPI\nUvicorn ASGI\nPort 8000"]
+        end
+        subgraph "Almacenamiento"
+            MYSQL[("🐬 MySQL 8.0\n14 tablas RBAC\nEntidades + Contraseñas")]
+            MONGO[("🍃 MongoDB 7.0\nSensor readings\nDevice logs")]
+            REDIS[("⚡ Redis 7.0\nSesiones JTI\nTTL: 1h/24h")]
+        end
+    end
+
+    CL --> NFT --> F2B --> NGX --> API
+    DEV --> NFT
+
+    API <-->|SQLAlchemy ORM| MYSQL
+    API <-->|PyMongo| MONGO
+    API <-->|redis-py| REDIS
+
+    style CL fill:#f5f3ff,stroke:#7c3aed,stroke-width:2px
+    style DEV fill:#fef3c7,stroke:#d97706,stroke-width:2px
+    style NFT fill:#fee2e2,stroke:#ef4444,stroke-width:2px
+    style F2B fill:#fee2e2,stroke:#ef4444,stroke-width:2px
+    style NGX fill:#dbeafe,stroke:#2563eb,stroke-width:2px
+    style API fill:#d1fae5,stroke:#059669,stroke-width:2px
+    style MYSQL fill:#dbeafe,stroke:#2563eb,stroke-width:2px
+    style MONGO fill:#d1fae5,stroke:#059669,stroke-width:2px
+    style REDIS fill:#fee2e2,stroke:#ef4444,stroke-width:2px
+                </pre>
+            </div>
+        </div>
+
+        <!-- 2. USER AUTH FLOW -->
+        <div class="diagram-section" id="d2">
+            <div class="diagram-header"><h2><span class="diagram-number">2</span>Flujo de Autenticación de Usuarios</h2><p>Login para admin_master, admin_normal, manager y user. Contraseñas hasheadas con Argon2. Sesión única forzada vía Redis (409 Conflict si hay sesión activa).</p></div>
+            <div class="diagram-body">
+                <pre class="mermaid">
+flowchart TD
+    A["🖥️ Cliente"] -->|"POST /api/v1/auth/login/{tipo}\ntipo: user | admin | manager"| B{"FastAPI\nAuth Router"}
+    B -->|"Buscar entidad por email"| C[("MySQL\n(admin/gerente/usuario)")]
+    C -->|"Datos + password_hash"| D{"AuthService:\nauth_by_password()"}
+    D -->|"Argon2 verify"| E{"¿Contraseña\nválida?"}
+    E -->|"❌ No"| F["401 Unauthorized\nCredenciales inválidas"]
+    E -->|"✅ Sí"| G{"SessionService:\ncheck_existing_session()"}
+    G -->|"Redis: EXISTS session:{id}"| H[("Redis")]
+    H -->|"Sesión activa encontrada"| I["409 Conflict\nSesión activa existente\n(debe hacer logout primero)"]
+    H -->|"Sin sesión previa"| J["Generar JWT Token\nuuid4() → JTI\nPayload: sub, rol_id, jti, exp"]
+    J --> K{"SessionService:\nsave_session()"}
+    K -->|"SET session:{id} = JTI\nEXPIRE TTL: 3600s"| L[("Redis")]
+    L --> M["200 OK\n{access_token, token_type: bearer}"]
+
+    style F fill:#fee2e2,stroke:#ef4444,stroke-width:2px
+    style I fill:#fef3c7,stroke:#f59e0b,stroke-width:2px
+    style M fill:#d1fae5,stroke:#059669,stroke-width:2px
+                </pre>
+            </div>
+        </div>
+
+        <!-- 3. DEVICE PUZZLE AUTH -->
+        <div class="diagram-section" id="d3">
+            <div class="diagram-header"><h2><span class="diagram-number">3</span>Flujo de Autenticación de Dispositivos (Puzzle Criptográfico)</h2><p>Autenticación sin contraseña usando AES-256-CBC + HMAC-SHA256. El servidor genera un challenge cifrado; el dispositivo demuestra posesión de la clave simétrica descifrándolo.</p></div>
+            <div class="diagram-body">
+                <pre class="mermaid">
+flowchart TD
+    A["📱 Dispositivo IoT"] -->|"POST /api/v1/auth/login/device\n{device_id}"| B{"Auth Router"}
+    B -->|"Buscar por device_id"| C[("MySQL\ntabla: dispositivo")]
+    C -->|"device + encryption_key\n(AES-256)"| D{"AuthService:\nauth_by_puzzle_device()"}
+    D --> E["1. Generar challenge aleatorio\nos.urandom(16).hex()"]
+    E --> F["2. AES-256-CBC Encrypt\nIV aleatorio de 16 bytes\nPKCS7 padding"]
+    F --> G["3. HMAC-SHA256\nsobre ciphertext\n(integridad)"]
+    G --> H["4. Construir puzzle:\niv_hex : ciphertext_hex : hmac_hex"]
+    H --> I["Enviar puzzle al dispositivo\n{puzzle, device_id}"]
+    I --> J{"📱 Dispositivo:\n1. Verificar HMAC\n2. Descifrar AES-CBC\n3. Extraer challenge"}
+    J -->|"Respuesta = challenge"| K{"¿challenge_response\n== challenge original?"}
+    K -->|"❌ No match"| L["401 Unauthorized\nPuzzle inválido"]
+    K -->|"✅ Match"| M["Generar JWT\nrol: device\nTTL: 86400s (24h)"]
+    M --> N{"SessionService:\nsave_session()"}
+    N -->|"JTI → Redis\nTTL: 86400s"| O[("Redis")]
+    O --> P["200 OK\nDevice Bearer Token"]
+
+    style L fill:#fee2e2,stroke:#ef4444,stroke-width:2px
+    style P fill:#d1fae5,stroke:#059669,stroke-width:2px
+    style A fill:#fef3c7,stroke:#d97706,stroke-width:2px
+                </pre>
+            </div>
+        </div>
+
+        <!-- 4. RBAC FLOW -->
+        <div class="diagram-section" id="d4">
+            <div class="diagram-header"><h2><span class="diagram-number">4</span>Flujo RBAC — Control de Acceso por Rol y Permiso</h2><p>Triple verificación en cada request protegido: 1) JWT válido, 2) Sesión activa en Redis, 3) Rol y permisos en MySQL. Implementado como dependencias FastAPI en deps.py.</p></div>
+            <div class="diagram-body">
+                <pre class="mermaid">
+flowchart TD
+    A["Request HTTP\nAuthorization: Bearer {JWT}"] --> B{"Dependency:\nget_current_user_or_device()"}
+    B -->|"Decodificar JWT\njwt.decode()"| C{"¿Token válido\ny no expirado?"}
+    C -->|"❌ Inválido/Expirado"| D["401 Unauthorized"]
+    C -->|"✅ Válido"| E{"SessionService:\nverify_session()"}
+    E -->|"GET session:{sub}"| F[("Redis")]
+    F -->|"JTI no coincide\no no existe"| G["401 Unauthorized\nSesión inválida/expirada"]
+    F -->|"JTI coincide ✅"| H{"Cargar entidad\ndesde MySQL"}
+    H --> I[("MySQL\nadmin/gerente/\nusuario/dispositivo")]
+    I --> J["current_user objeto\n(con rol_id)"]
+
+    J --> K{"Decorator:\n@require_role(roles)"}
+    K --> L{"¿rol_id del usuario\nen lista permitida?"}
+    L -->|"❌ Rol no autorizado"| M["403 Forbidden\nRol insuficiente"]
+    L -->|"✅ Rol válido"| N{"Decorator:\n@require_permission(perm)"}
+    N -->|"SELECT FROM rol_permiso\nJOIN permiso"| O[("MySQL")]
+    O --> P{"¿El rol tiene\nel permiso requerido?"}
+    P -->|"❌ Sin permiso"| Q["403 Forbidden\nPermiso denegado"]
+    P -->|"✅ Permiso concedido"| R["✅ ACCESO CONCEDIDO\nEjecutar endpoint"]
+
+    style D fill:#fee2e2,stroke:#ef4444,stroke-width:2px
+    style G fill:#fee2e2,stroke:#ef4444,stroke-width:2px
+    style M fill:#fef3c7,stroke:#f59e0b,stroke-width:2px
+    style Q fill:#fef3c7,stroke:#f59e0b,stroke-width:2px
+    style R fill:#d1fae5,stroke:#059669,stroke-width:2px
+                </pre>
+            </div>
+        </div>
+
+        <!-- 5. ROLE HIERARCHY -->
+        <div class="diagram-section" id="d5">
+            <div class="diagram-header"><h2><span class="diagram-number">5</span>Jerarquía de Roles y Acceso a Entidades</h2><p>4 roles con 16 permisos granulares. El admin_master tiene control total; cada rol inferior hereda menos permisos. Los managers pueden crear usuarios; los usuarios solo consultan.</p></div>
+            <div class="diagram-body">
+                <pre class="mermaid">
+flowchart TD
+    subgraph "Jerarquía de Roles"
+        AM["🔵 ADMIN MASTER\nrol_id: 1 · 16/16 permisos\n──────────────────\ncreate/delete/update user\ncreate/delete/update device\ncreate/delete/update service\nassign_device · manage_roles\nmanage_permissions · system_config\nview_reports · view_all_users\nview_audit_logs"]
+        AN["🔷 ADMIN NORMAL\nrol_id: 2 · 4/16 permisos\n──────────────────\ncreate_service\nassign_device\nview_reports\nview_all_users"]
+        MG["🟢 MANAGER (Gerente)\nrol_id: 4 · 5/16 permisos\n──────────────────\ncreate_user\ncreate_service\nassign_device\nview_reports\nview_all_users"]
+        US["🟣 USER (Usuario)\nrol_id: 3 · 2/16 permisos\n──────────────────\nview_reports\nview_all_users"]
+    end
+
+    AM -->|"POST /api/v1/users/manager\n(crea managers)"| MG
+    AM -->|"Crea admins normales"| AN
+    AM -->|"POST /api/v1/users/\n(crea usuarios)"| US
+    MG -->|"POST /api/v1/users/\n(crea usuarios)"| US
+
+    subgraph "Entidades del Sistema"
+        SV["⚙️ Servicio\ntabla: servicio"]
+        DV["📱 Dispositivo\ntabla: dispositivo"]
+        APP["📦 Aplicación\ntabla: app"]
+    end
+
+    AM ==>|"CRUD completo"| SV
+    AM ==>|"CRUD completo"| DV
+    AM ==>|"CRUD completo"| APP
+    AN -->|"Crea + Asigna"| SV
+    AN -->|"Asigna a servicios"| DV
+    MG -->|"Crea + Asigna"| SV
+    MG -->|"Asigna a servicios"| DV
+    US -.->|"Solo lectura (reportes)"| SV
+
+    style AM fill:#dbeafe,stroke:#2563eb,stroke-width:2px
+    style AN fill:#cffafe,stroke:#0891b2,stroke-width:2px
+    style MG fill:#d1fae5,stroke:#059669,stroke-width:2px
+    style US fill:#ede9fe,stroke:#7c3aed,stroke-width:2px
+    style SV fill:#fef3c7,stroke:#d97706,stroke-width:2px
+    style DV fill:#fef3c7,stroke:#d97706,stroke-width:2px
+    style APP fill:#f3e8ff,stroke:#9333ea,stroke-width:2px
+                </pre>
+            </div>
+        </div>
+
+        <!-- 6. SEQUENCE DIAGRAM -->
+        <div class="diagram-section" id="d6">
+            <div class="diagram-header"><h2><span class="diagram-number">6</span>Diagrama de Secuencia — Flujo Completo de Datos IoT</h2><p>Flujo end-to-end: autenticación de dispositivo → envío de lecturas a MongoDB → consulta de reportes por usuario autenticado.</p></div>
+            <div class="diagram-body">
+                <pre class="mermaid">
+sequenceDiagram
+    participant D as 📱 Dispositivo IoT
+    participant API as 🐍 FastAPI
+    participant MySQL as 🐬 MySQL
+    participant Redis as ⚡ Redis
+    participant Mongo as 🍃 MongoDB
+    participant U as 🖥️ Usuario
+
+    Note over D,U: ── FASE 1: Autenticación del Dispositivo ──
+    D->>API: POST /api/v1/auth/login/device {device_id}
+    API->>MySQL: SELECT * FROM dispositivo WHERE id_dispositivo = ?
+    MySQL-->>API: device_data + encryption_key
+    API->>API: Generar puzzle (AES-256-CBC + HMAC-SHA256)
+    API-->>D: {puzzle: "iv:ciphertext:hmac"}
+    D->>D: Descifrar puzzle con encryption_key compartida
+    D->>API: {challenge_response: "decrypted_challenge"}
+    API->>API: Verificar: response == original_challenge
+    API->>Redis: SET session:device:{id} = JTI (TTL: 86400s)
+    Redis-->>API: OK
+    API-->>D: 200 {access_token: JWT, token_type: bearer}
+
+    Note over D,U: ── FASE 2: Envío de Lecturas de Sensores ──
+    loop Cada 30 segundos
+        D->>API: POST /api/v1/sensors/device/reading<br/>Headers: Authorization: Bearer {JWT}<br/>Body: {temperature, humidity, battery, location}
+        API->>Redis: GET session:device:{id} → verificar JTI
+        Redis-->>API: JTI válido ✅
+        API->>Mongo: db.sensor_readings.insert_one({device_id, readings, timestamp})
+        Mongo-->>API: inserted_id
+        API-->>D: 201 Created {reading_id}
+    end
+
+    Note over D,U: ── FASE 3: Login de Usuario y Consulta ──
+    U->>API: POST /api/v1/auth/login/user {email, password}
+    API->>MySQL: SELECT * FROM usuario WHERE correo = ?
+    MySQL-->>API: user_data
+    API->>API: Argon2 verify(password, hash)
+    API->>Redis: SET session:user:{id} = JTI (TTL: 3600s)
+    API-->>U: 200 {access_token: JWT, token_type: bearer}
+
+    Note over D,U: ── FASE 4: Consulta de Reportes ──
+    U->>API: GET /api/v1/devices/{id}/readings?limit=100<br/>Headers: Authorization: Bearer {JWT}
+    API->>Redis: Verificar JTI sesión usuario
+    Redis-->>API: JTI válido ✅
+    API->>MySQL: Verificar permisos: rol_permiso → view_reports
+    MySQL-->>API: Permiso concedido ✅
+    API->>Mongo: db.sensor_readings.find({device_id}).sort({timestamp: -1}).limit(100)
+    Mongo-->>API: [{temperature: 23.5, humidity: 65.2, ...}, ...]
+    API-->>U: 200 OK [{readings array}]
+
+    Note over D,U: ── FASE 5: Logout y Limpieza ──
+    U->>API: POST /api/v1/auth/logout<br/>Headers: Authorization: Bearer {JWT}
+    API->>Redis: DEL session:user:{id}
+    Redis-->>API: OK
+    API-->>U: 200 {message: "Sesión cerrada"}
+                </pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#dbeafe',
+                primaryTextColor: '#1e293b',
+                primaryBorderColor: '#2563eb',
+                lineColor: '#64748b',
+                secondaryColor: '#f1f5f9',
+                tertiaryColor: '#f8fafc',
+                fontFamily: 'Segoe UI, system-ui, sans-serif',
+                fontSize: '13px'
+            },
+            flowchart: { curve: 'basis', padding: 20 },
+            sequence: { actorMargin: 60, messageMargin: 40 }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT Platform - Gerente (Manager)</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        :root {
+            --primary: #059669; --primary-dark: #047857; --primary-light: #d1fae5; --accent: #10b981;
+            --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
+            --gray-50:#f8fafc; --gray-100:#f1f5f9; --gray-200:#e2e8f0; --gray-300:#cbd5e1;
+            --gray-400:#94a3b8; --gray-500:#64748b; --gray-600:#475569; --gray-700:#334155;
+            --gray-800:#1e293b; --gray-900:#0f172a;
+            --shadow:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.06);
+            --shadow-md:0 4px 6px -1px rgba(0,0,0,0.07),0 2px 4px -2px rgba(0,0,0,0.05);
+            --radius:12px; --radius-sm:8px;
+        }
+        body { font-family:'Segoe UI',system-ui,-apple-system,sans-serif; background:var(--gray-50); color:var(--gray-800); line-height:1.6; }
+
+        .login-screen { min-height:100vh; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#ecfdf5 0%,#d1fae5 50%,#a7f3d0 100%); position:relative; overflow:hidden; }
+        .login-screen::before { content:''; position:absolute; top:-50%; right:-20%; width:600px; height:600px; background:radial-gradient(circle,rgba(5,150,105,0.06) 0%,transparent 70%); border-radius:50%; }
+        .login-card { background:white; border-radius:20px; box-shadow:0 20px 60px rgba(0,0,0,0.08); padding:48px; width:420px; max-width:95%; position:relative; z-index:1; }
+        .login-logo { text-align:center; margin-bottom:32px; }
+        .login-logo .icon { width:64px; height:64px; background:linear-gradient(135deg,var(--primary),var(--accent)); border-radius:16px; display:inline-flex; align-items:center; justify-content:center; margin-bottom:16px; box-shadow:0 8px 20px rgba(5,150,105,0.2); }
+        .login-logo .icon svg { width:32px; height:32px; fill:white; }
+        .login-logo h1 { font-size:22px; font-weight:700; color:var(--gray-900); }
+        .login-logo p { font-size:13px; color:var(--gray-500); margin-top:4px; }
+        .login-badge { display:inline-block; background:linear-gradient(135deg,var(--primary),var(--primary-dark)); color:white; padding:4px 14px; border-radius:20px; font-size:11px; font-weight:600; letter-spacing:0.5px; text-transform:uppercase; margin-top:8px; }
+        .form-group { margin-bottom:20px; }
+        .form-group label { display:block; font-size:13px; font-weight:600; color:var(--gray-700); margin-bottom:6px; }
+        .form-group input { width:100%; padding:12px 16px; border:1.5px solid var(--gray-200); border-radius:var(--radius-sm); font-size:14px; transition:all 0.2s; background:var(--gray-50); color:var(--gray-800); }
+        .form-group input:focus { outline:none; border-color:var(--primary); background:white; box-shadow:0 0 0 3px rgba(5,150,105,0.1); }
+        .form-group input::placeholder { color:var(--gray-400); }
+        .btn-primary { width:100%; padding:13px; background:linear-gradient(135deg,var(--primary),var(--primary-dark)); color:white; border:none; border-radius:var(--radius-sm); font-size:15px; font-weight:600; cursor:pointer; transition:all 0.2s; box-shadow:0 4px 12px rgba(5,150,105,0.25); }
+        .btn-primary:hover { transform:translateY(-1px); box-shadow:0 6px 16px rgba(5,150,105,0.3); }
+        .session-warning { background:#fffbeb; border:1px solid #fef3c7; border-radius:var(--radius-sm); padding:12px; margin-bottom:20px; font-size:12px; color:#92400e; display:flex; align-items:center; gap:8px; }
+
+        .dashboard { display:none; min-height:100vh; }
+        .dashboard.active { display:flex; }
+        .login-screen.hidden { display:none; }
+
+        .sidebar { width:260px; background:white; border-right:1px solid var(--gray-200); display:flex; flex-direction:column; position:fixed; top:0; left:0; height:100vh; z-index:10; }
+        .sidebar-header { padding:20px 24px; border-bottom:1px solid var(--gray-100); display:flex; align-items:center; gap:12px; }
+        .sidebar-header .logo-icon { width:36px; height:36px; background:linear-gradient(135deg,var(--primary),var(--accent)); border-radius:10px; display:flex; align-items:center; justify-content:center; }
+        .sidebar-header .logo-icon svg { width:18px; height:18px; fill:white; }
+        .sidebar-header h2 { font-size:16px; font-weight:700; color:var(--gray-900); }
+        .sidebar-header span { font-size:11px; color:var(--gray-400); }
+        .sidebar-nav { flex:1; padding:12px; overflow-y:auto; }
+        .nav-section { margin-bottom:24px; }
+        .nav-section-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--gray-400); padding:0 12px; margin-bottom:8px; }
+        .nav-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:var(--radius-sm); cursor:pointer; transition:all 0.15s; font-size:13.5px; color:var(--gray-600); text-decoration:none; }
+        .nav-item:hover { background:var(--gray-100); color:var(--gray-800); }
+        .nav-item.active { background:var(--primary-light); color:var(--primary); font-weight:600; }
+        .nav-item svg { width:18px; height:18px; flex-shrink:0; }
+        .nav-item .badge { margin-left:auto; background:var(--primary); color:white; padding:1px 7px; border-radius:10px; font-size:11px; font-weight:600; }
+        .sidebar-footer { padding:16px; border-top:1px solid var(--gray-100); }
+        .user-info { display:flex; align-items:center; gap:10px; padding:8px; }
+        .user-avatar { width:36px; height:36px; background:linear-gradient(135deg,var(--primary),var(--accent)); border-radius:10px; display:flex; align-items:center; justify-content:center; color:white; font-weight:700; font-size:14px; }
+        .user-details h4 { font-size:13px; font-weight:600; color:var(--gray-800); }
+        .role-tag { display:inline-block; padding:2px 8px; border-radius:6px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; }
+        .role-tag.manager { background:linear-gradient(135deg,#d1fae5,#a7f3d0); color:#065f46; }
+        .btn-logout { display:flex; align-items:center; gap:8px; width:100%; padding:10px 12px; background:none; border:1px solid var(--gray-200); border-radius:var(--radius-sm); font-size:13px; color:var(--gray-500); cursor:pointer; transition:all 0.15s; margin-top:8px; }
+        .btn-logout:hover { background:#fef2f2; border-color:#fecaca; color:var(--danger); }
+
+        .main-content { margin-left:260px; flex:1; min-height:100vh; }
+        .top-bar { background:white; border-bottom:1px solid var(--gray-200); padding:16px 32px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:5; }
+        .top-bar h1 { font-size:20px; font-weight:700; color:var(--gray-900); }
+        .content-area { padding:28px 32px; }
+
+        .stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:20px; margin-bottom:28px; }
+        .stat-card { background:white; border-radius:var(--radius); padding:22px; box-shadow:var(--shadow); border:1px solid var(--gray-100); }
+        .stat-card .stat-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+        .stat-card .stat-icon { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; }
+        .stat-card .stat-icon svg { width:20px; height:20px; }
+        .stat-card .stat-value { font-size:28px; font-weight:800; color:var(--gray-900); }
+        .stat-card .stat-label { font-size:13px; color:var(--gray-500); margin-top:2px; }
+
+        .panel { background:white; border-radius:var(--radius); box-shadow:var(--shadow); border:1px solid var(--gray-100); margin-bottom:24px; }
+        .panel-header { padding:20px 24px; border-bottom:1px solid var(--gray-100); display:flex; align-items:center; justify-content:space-between; }
+        .panel-header h3 { font-size:16px; font-weight:700; color:var(--gray-900); }
+        .panel-body { padding:20px 24px; }
+
+        .btn-sm { padding:7px 16px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; transition:all 0.15s; border:none; display:inline-flex; align-items:center; gap:6px; }
+        .btn-sm.primary { background:var(--primary); color:white; }
+        .btn-sm.primary:hover { background:var(--primary-dark); }
+        .btn-sm.outline { background:white; color:var(--gray-600); border:1px solid var(--gray-200); }
+
+        table { width:100%; border-collapse:collapse; }
+        th { text-align:left; padding:12px 16px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--gray-500); border-bottom:1px solid var(--gray-100); }
+        td { padding:14px 16px; font-size:13.5px; border-bottom:1px solid var(--gray-50); color:var(--gray-700); }
+        tr:hover td { background:var(--gray-50); }
+
+        .status-badge { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:6px; font-size:12px; font-weight:600; }
+        .status-badge.active { background:#d1fae5; color:#065f46; }
+        .status-badge.inactive { background:#fee2e2; color:#991b1b; }
+        .status-badge.connected { background:#d1fae5; color:#065f46; }
+        .status-badge.disconnected { background:#fef3c7; color:#92400e; }
+        .status-dot { width:6px; height:6px; border-radius:50%; }
+        .status-dot.green { background:#10b981; }
+        .status-dot.red { background:#ef4444; }
+        .status-dot.amber { background:#f59e0b; }
+
+        .page-section { display:none; }
+        .page-section.active { display:block; }
+        .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+
+        .info-box { background:var(--primary-light); border:1px solid #a7f3d0; border-radius:var(--radius-sm); padding:16px; margin-bottom:20px; font-size:13px; color:#065f46; }
+
+        .action-card { background:white; border:1px solid var(--gray-200); border-radius:var(--radius); padding:24px; cursor:pointer; transition:all 0.2s; }
+        .action-card:hover { border-color:var(--primary); box-shadow:var(--shadow-md); transform:translateY(-2px); }
+        .action-card .action-icon { width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center; margin-bottom:14px; }
+        .action-card .action-icon svg { width:22px; height:22px; }
+        .action-card h4 { font-size:15px; font-weight:700; color:var(--gray-900); margin-bottom:4px; }
+        .action-card p { font-size:13px; color:var(--gray-500); }
+
+        .service-card { border:1px solid var(--gray-200); border-radius:var(--radius); padding:20px; margin-bottom:16px; }
+        .service-card .service-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+        .service-card .service-header h4 { font-size:15px; font-weight:700; }
+        .service-card .service-meta { display:flex; gap:20px; font-size:13px; color:var(--gray-500); }
+
+        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.3); backdrop-filter:blur(4px); z-index:100; align-items:center; justify-content:center; }
+        .modal-overlay.active { display:flex; }
+        .modal { background:white; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,0.15); width:480px; max-width:95%; max-height:90vh; overflow-y:auto; }
+        .modal-header { padding:20px 24px; border-bottom:1px solid var(--gray-100); display:flex; align-items:center; justify-content:space-between; }
+        .modal-header h3 { font-size:17px; font-weight:700; }
+        .modal-close { width:32px; height:32px; border-radius:8px; border:none; background:var(--gray-100); cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--gray-500); font-size:18px; }
+        .modal-body { padding:24px; }
+        .modal-footer { padding:16px 24px; border-top:1px solid var(--gray-100); display:flex; justify-content:flex-end; gap:10px; }
+
+        .permission-item { display:flex; align-items:center; gap:8px; padding:10px 14px; border-radius:var(--radius-sm); background:var(--gray-50); font-size:12.5px; color:var(--gray-700); }
+        .permission-item .check { width:18px; height:18px; background:var(--success); border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+        .permission-item .check svg { width:10px; height:10px; fill:white; }
+        .permission-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+
+        @media (max-width:1200px) { .stats-grid { grid-template-columns:repeat(2,1fr); } .permission-grid { grid-template-columns:repeat(2,1fr); } }
+        @media (max-width:768px) { .sidebar { display:none; } .main-content { margin-left:0; } .stats-grid { grid-template-columns:1fr; } .grid-2 { grid-template-columns:1fr; } }
+    </style>
+</head>
+<body>
+    <!-- LOGIN -->
+    <div class="login-screen" id="loginScreen">
+        <div class="login-card">
+            <div class="login-logo">
+                <div class="icon"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg></div>
+                <h1>IoT Platform</h1>
+                <p>Plataforma de Gestión IoT Empresarial</p>
+                <div class="login-badge">Gerente (Manager)</div>
+            </div>
+            <div class="session-warning">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#92400e" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                Sesión única: Solo una sesión activa permitida (409 Conflict). Usa POST /logout antes de reloguear.
+            </div>
+            <form onsubmit="handleLogin(event)">
+                <div class="form-group"><label>Correo electrónico</label><input type="email" placeholder="gerente@iot-platform.local" value="gerente@iot-platform.local"></div>
+                <div class="form-group"><label>Contraseña</label><input type="password" placeholder="••••••••" value="••••••••"></div>
+                <button type="submit" class="btn-primary">Iniciar Sesión</button>
+            </form>
+            <p style="text-align:center;margin-top:16px;font-size:12px;color:var(--gray-400);">POST /api/v1/auth/login/manager → JWT Bearer Token</p>
+        </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div class="dashboard" id="dashboard">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-icon"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg></div>
+                <div><h2>IoT Platform</h2><span>v1.1 — Gerente</span></div>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Principal</div>
+                    <a class="nav-item active" onclick="showPage('dashboard-home')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                        Dashboard
+                    </a>
+                    <a class="nav-item" onclick="showPage('profile-page')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        Mi Perfil
+                    </a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Gestión de Usuarios</div>
+                    <a class="nav-item" onclick="showPage('users-page')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        Usuarios
+                        <span class="badge">5</span>
+                    </a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Servicios</div>
+                    <a class="nav-item" onclick="showPage('services-page')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06"/></svg>
+                        Mis Servicios
+                        <span class="badge">3</span>
+                    </a>
+                    <a class="nav-item" onclick="showPage('assign-users-page')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                        Asignar Usuarios
+                    </a>
+                    <a class="nav-item" onclick="showPage('assign-devices-page')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                        Asignar Dispositivos
+                    </a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Monitoreo</div>
+                    <a class="nav-item" onclick="showPage('devices-page')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
+                        Dispositivos
+                    </a>
+                    <a class="nav-item" onclick="showPage('sensors-page')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                        Lecturas de Sensores
+                    </a>
+                </div>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <div class="user-avatar">GP</div>
+                    <div class="user-details">
+                        <h4>Gerente Principal</h4>
+                        <span class="role-tag manager">manager</span>
+                    </div>
+                </div>
+                <button class="btn-logout" onclick="handleLogout()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    Cerrar Sesión
+                </button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <div class="top-bar">
+                <h1 id="pageTitle">Dashboard</h1>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="padding:4px 12px;border-radius:6px;font-size:11px;font-weight:600;background:#d1fae5;color:#065f46;">5 permisos activos</span>
+                </div>
+            </div>
+
+            <div class="content-area">
+                <!-- DASHBOARD HOME -->
+                <div class="page-section active" id="dashboard-home">
+                    <div class="info-box">
+                        <strong>Gerente (Manager)</strong> — Puedes crear usuarios, crear servicios, asignar dispositivos a servicios, asignar usuarios a servicios, ver reportes y listar usuarios. Reportas al Admin que te creó.
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-header">
+                                <div><div class="stat-value">3</div><div class="stat-label">Mis Servicios</div></div>
+                                <div class="stat-icon" style="background:var(--primary-light);color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/></svg></div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-header">
+                                <div><div class="stat-value">5</div><div class="stat-label">Usuarios</div></div>
+                                <div class="stat-icon" style="background:#dbeafe;color:#2563eb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-header">
+                                <div><div class="stat-value">8</div><div class="stat-label">Dispositivos</div></div>
+                                <div class="stat-icon" style="background:#fef3c7;color:#d97706"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="12" cy="12" r="3"/></svg></div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-header">
+                                <div><div class="stat-value">847</div><div class="stat-label">Lecturas (24h)</div></div>
+                                <div class="stat-icon" style="background:#e0e7ff;color:#4f46e5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid-2">
+                        <div class="panel">
+                            <div class="panel-header"><h3>Acciones de Gerente</h3></div>
+                            <div class="panel-body">
+                                <div class="grid-2" style="gap:12px">
+                                    <div class="action-card" onclick="showPage('users-page')">
+                                        <div class="action-icon" style="background:#dbeafe;color:#2563eb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg></div>
+                                        <h4>Crear Usuario</h4>
+                                        <p>Registrar nuevos usuarios finales</p>
+                                    </div>
+                                    <div class="action-card" onclick="showPage('services-page')">
+                                        <div class="action-icon" style="background:var(--primary-light);color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06"/></svg></div>
+                                        <h4>Crear Servicio</h4>
+                                        <p>Crear y gestionar servicios IoT</p>
+                                    </div>
+                                    <div class="action-card" onclick="showPage('assign-users-page')">
+                                        <div class="action-icon" style="background:#fef3c7;color:#d97706"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
+                                        <h4>Asignar Usuarios</h4>
+                                        <p>Vincular usuarios a servicios</p>
+                                    </div>
+                                    <div class="action-card" onclick="showPage('assign-devices-page')">
+                                        <div class="action-icon" style="background:#ede9fe;color:#7c3aed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg></div>
+                                        <h4>Asignar Dispositivos</h4>
+                                        <p>Vincular dispositivos a servicios</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="panel">
+                            <div class="panel-header"><h3>Mis Servicios Activos</h3></div>
+                            <div class="panel-body">
+                                <div class="service-card" style="padding:14px;">
+                                    <div class="service-header" style="margin-bottom:8px;"><h4 style="font-size:14px;">🌡️ Monitoreo Ambiental</h4><span class="status-badge connected" style="font-size:11px;"><span class="status-dot green"></span>On</span></div>
+                                    <div class="service-meta" style="font-size:12px;"><span>📱 3 disp.</span><span>👥 5 usuarios</span></div>
+                                </div>
+                                <div class="service-card" style="padding:14px;">
+                                    <div class="service-header" style="margin-bottom:8px;"><h4 style="font-size:14px;">🏭 Automatización Industrial</h4><span class="status-badge disconnected" style="font-size:11px;"><span class="status-dot amber"></span>Off</span></div>
+                                    <div class="service-meta" style="font-size:12px;"><span>📱 3 disp.</span><span>👥 2 usuarios</span></div>
+                                </div>
+                                <div class="service-card" style="padding:14px;">
+                                    <div class="service-header" style="margin-bottom:8px;"><h4 style="font-size:14px;">🌾 Agricultura Inteligente</h4><span class="status-badge connected" style="font-size:11px;"><span class="status-dot green"></span>On</span></div>
+                                    <div class="service-meta" style="font-size:12px;"><span>📱 2 disp.</span><span>👥 3 usuarios</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PROFILE PAGE -->
+                <div class="page-section" id="profile-page">
+                    <div class="panel">
+                        <div class="panel-header"><h3>Mi Perfil</h3></div>
+                        <div class="panel-body">
+                            <p style="font-size:13px;color:var(--gray-500);margin-bottom:16px;">Endpoint: <code>GET /api/v1/users/me</code></p>
+                            <div class="grid-2" style="gap:16px;">
+                                <div class="form-group"><label>Nombre</label><input value="Gerente Principal" disabled style="background:var(--gray-50);"></div>
+                                <div class="form-group"><label>Email</label><input value="gerente@iot-platform.local" disabled style="background:var(--gray-50);"></div>
+                                <div class="form-group"><label>Rol</label><input value="manager (5 permisos)" disabled style="background:var(--gray-50);"></div>
+                                <div class="form-group"><label>Admin asignado</label><input value="Admin Master (ID: 1)" disabled style="background:var(--gray-50);"></div>
+                            </div>
+                            <h4 style="margin:20px 0 12px;font-size:14px;color:var(--gray-700);">Permisos</h4>
+                            <div class="permission-grid">
+                                <div class="permission-item"><div class="check"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>create_user</div>
+                                <div class="permission-item"><div class="check"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>create_service</div>
+                                <div class="permission-item"><div class="check"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>assign_device</div>
+                                <div class="permission-item"><div class="check"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>view_reports</div>
+                                <div class="permission-item"><div class="check"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>view_all_users</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- USERS PAGE -->
+                <div class="page-section" id="users-page">
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3>Gestión de Usuarios</h3>
+                            <button class="btn-sm primary" onclick="openModal('create-user-modal')">+ Crear Usuario</button>
+                        </div>
+                        <div class="panel-body">
+                            <p style="font-size:13px;color:var(--gray-500);margin-bottom:16px;">Endpoint: <code>POST /api/v1/users/</code> · Permiso: <code>create_user</code> ✅ · Hash: Argon2</p>
+                            <table>
+                                <thead><tr><th>ID</th><th>Nombre</th><th>Email</th><th>Rol</th><th>Estado</th><th>Creado</th></tr></thead>
+                                <tbody>
+                                    <tr><td>1</td><td>Usuario Test</td><td>user@iot-platform.local</td><td><span class="status-badge" style="background:#e0e7ff;color:#3730a3;">user</span></td><td><span class="status-badge active"><span class="status-dot green"></span>Activo</span></td><td>2026-03-15</td></tr>
+                                    <tr><td>2</td><td>Ana López</td><td>ana.lopez@iot-platform.local</td><td><span class="status-badge" style="background:#e0e7ff;color:#3730a3;">user</span></td><td><span class="status-badge active"><span class="status-dot green"></span>Activo</span></td><td>2026-03-16</td></tr>
+                                    <tr><td>3</td><td>Carlos Ruiz</td><td>carlos.r@iot-platform.local</td><td><span class="status-badge" style="background:#e0e7ff;color:#3730a3;">user</span></td><td><span class="status-badge inactive"><span class="status-dot red"></span>Inactivo</span></td><td>2026-03-17</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SERVICES PAGE -->
+                <div class="page-section" id="services-page">
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3>Mis Servicios IoT</h3>
+                            <button class="btn-sm primary">+ Crear Servicio</button>
+                        </div>
+                        <div class="panel-body">
+                            <p style="font-size:13px;color:var(--gray-500);margin-bottom:20px;">Permiso: <code>create_service</code> ✅ · Tabla: <code>servicio</code> · Estados: conectado/desconectado</p>
+                            <div class="service-card">
+                                <div class="service-header"><h4>🌡️ Monitoreo Ambiental - Planta A</h4><span class="status-badge connected"><span class="status-dot green"></span>Conectado</span></div>
+                                <p style="font-size:13px;color:var(--gray-500);margin-bottom:10px;">Monitoreo de temperatura y humedad. Sensores en planta de producción.</p>
+                                <div class="service-meta"><span>📅 Inicio: 2026-01-15</span><span>📱 3 dispositivos</span><span>👥 5 usuarios</span></div>
+                            </div>
+                            <div class="service-card">
+                                <div class="service-header"><h4>🏭 Automatización Industrial - Línea 2</h4><span class="status-badge disconnected"><span class="status-dot amber"></span>Desconectado</span></div>
+                                <p style="font-size:13px;color:var(--gray-500);margin-bottom:10px;">Control de temperatura en maquinaria. En mantenimiento programado.</p>
+                                <div class="service-meta"><span>📅 Inicio: 2026-03-01</span><span>📱 3 dispositivos</span><span>👥 2 usuarios</span></div>
+                            </div>
+                            <div class="service-card">
+                                <div class="service-header"><h4>🌾 Agricultura Inteligente - Parcela Norte</h4><span class="status-badge connected"><span class="status-dot green"></span>Conectado</span></div>
+                                <p style="font-size:13px;color:var(--gray-500);margin-bottom:10px;">Monitoreo de humedad de suelo y condiciones metereológicas.</p>
+                                <div class="service-meta"><span>📅 Inicio: 2026-02-10</span><span>📱 2 dispositivos</span><span>👥 3 usuarios</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ASSIGN USERS TO SERVICES -->
+                <div class="page-section" id="assign-users-page">
+                    <div class="panel">
+                        <div class="panel-header"><h3>Asignar Usuarios a Servicios</h3></div>
+                        <div class="panel-body">
+                            <p style="font-size:13px;color:var(--gray-500);margin-bottom:20px;">Tabla: <code>usuario_servicio</code> · Vincula usuarios con servicios bajo tu gestión</p>
+                            <div class="grid-2" style="gap:20px;">
+                                <div>
+                                    <div class="form-group"><label>Servicio</label><select style="width:100%;padding:12px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:14px;background:var(--gray-50);"><option>Monitoreo Ambiental - Planta A</option><option>Automatización Industrial - Línea 2</option><option>Agricultura Inteligente - Parcela Norte</option></select></div>
+                                    <div class="form-group"><label>Usuario</label><select style="width:100%;padding:12px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:14px;background:var(--gray-50);"><option>Usuario Test (user@iot-platform.local)</option><option>Ana López (ana.lopez@iot-platform.local)</option><option>Carlos Ruiz (carlos.r@iot-platform.local)</option></select></div>
+                                    <button class="btn-sm primary">Asignar Usuario</button>
+                                </div>
+                                <div>
+                                    <h4 style="margin-bottom:12px;font-size:14px;">Asignaciones Actuales</h4>
+                                    <table>
+                                        <thead><tr><th>Usuario</th><th>Servicio</th><th>Fecha</th></tr></thead>
+                                        <tbody>
+                                            <tr><td>Usuario Test</td><td>Monitoreo Ambiental</td><td>2026-03-15</td></tr>
+                                            <tr><td>Ana López</td><td>Monitoreo Ambiental</td><td>2026-03-16</td></tr>
+                                            <tr><td>Ana López</td><td>Agricultura Inteligente</td><td>2026-03-16</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ASSIGN DEVICES TO SERVICES -->
+                <div class="page-section" id="assign-devices-page">
+                    <div class="panel">
+                        <div class="panel-header"><h3>Asignar Dispositivos a Servicios</h3></div>
+                        <div class="panel-body">
+                            <p style="font-size:13px;color:var(--gray-500);margin-bottom:20px;">Permiso: <code>assign_device</code> ✅ · Tabla: <code>servicio_dispositivo</code></p>
+                            <div class="grid-2" style="gap:20px;">
+                                <div>
+                                    <div class="form-group"><label>Servicio</label><select style="width:100%;padding:12px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:14px;background:var(--gray-50);"><option>Monitoreo Ambiental - Planta A</option><option>Automatización Industrial - Línea 2</option><option>Agricultura Inteligente</option></select></div>
+                                    <div class="form-group"><label>Dispositivo</label><select style="width:100%;padding:12px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:14px;background:var(--gray-50);"><option>sensor-test-001 (temperatura)</option><option>sensor-hum-002 (humedad)</option><option>sensor-bat-003 (batería)</option></select></div>
+                                    <button class="btn-sm primary">Asignar Dispositivo</button>
+                                </div>
+                                <div>
+                                    <h4 style="margin-bottom:12px;font-size:14px;">Asignaciones Actuales</h4>
+                                    <table>
+                                        <thead><tr><th>Servicio</th><th>Dispositivo</th></tr></thead>
+                                        <tbody>
+                                            <tr><td>Monitoreo Ambiental</td><td>sensor-test-001</td></tr>
+                                            <tr><td>Monitoreo Ambiental</td><td>sensor-hum-002</td></tr>
+                                            <tr><td>Automatización</td><td>sensor-bat-003</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DEVICES PAGE -->
+                <div class="page-section" id="devices-page">
+                    <div class="panel">
+                        <div class="panel-header"><h3>Dispositivos IoT</h3></div>
+                        <div class="panel-body">
+                            <p style="font-size:13px;color:var(--gray-500);margin-bottom:16px;">Endpoint: <code>GET /api/v1/devices/</code> · Permiso: <code>view_reports</code> ✅</p>
+                            <table>
+                                <thead><tr><th>ID</th><th>Nombre</th><th>Tipo</th><th>Estado</th><th>Servicio</th><th>Última Lectura</th></tr></thead>
+                                <tbody>
+                                    <tr><td>1</td><td>sensor-test-001</td><td>temperatura</td><td><span class="status-badge active"><span class="status-dot green"></span>Activo</span></td><td>Monitoreo Ambiental</td><td>Hace 2 min</td></tr>
+                                    <tr><td>2</td><td>sensor-hum-002</td><td>humedad</td><td><span class="status-badge active"><span class="status-dot green"></span>Activo</span></td><td>Monitoreo Ambiental</td><td>Hace 5 min</td></tr>
+                                    <tr><td>3</td><td>sensor-bat-003</td><td>batería</td><td><span class="status-badge inactive"><span class="status-dot red"></span>Inactivo</span></td><td>Automatización</td><td>Hace 3 días</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SENSORS PAGE -->
+                <div class="page-section" id="sensors-page">
+                    <div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">
+                        <div class="stat-card"><div class="stat-header"><div><div class="stat-value">23.5°C</div><div class="stat-label">Temperatura</div></div><div class="stat-icon" style="background:#fee2e2;color:#dc2626"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 14.76V3.5a2.5 2.5 0 00-5 0v11.26a4.5 4.5 0 105 0z"/></svg></div></div></div>
+                        <div class="stat-card"><div class="stat-header"><div><div class="stat-value">65%</div><div class="stat-label">Humedad</div></div><div class="stat-icon" style="background:var(--primary-light);color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/></svg></div></div></div>
+                        <div class="stat-card"><div class="stat-header"><div><div class="stat-value">78%</div><div class="stat-label">Batería</div></div><div class="stat-icon" style="background:#d1fae5;color:var(--success)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="6" width="18" height="12" rx="2"/><line x1="23" y1="13" x2="23" y2="11"/></svg></div></div></div>
+                    </div>
+                    <div class="panel">
+                        <div class="panel-header"><h3>Historial de Lecturas</h3></div>
+                        <div class="panel-body">
+                            <p style="font-size:13px;color:var(--gray-500);margin-bottom:16px;">Endpoint: <code>GET /api/v1/devices/{id}/readings</code></p>
+                            <table>
+                                <thead><tr><th>Dispositivo</th><th>Tipo</th><th>Valor</th><th>Unidad</th><th>Ubicación</th><th>Timestamp</th></tr></thead>
+                                <tbody>
+                                    <tr><td>sensor-test-001</td><td>temperature</td><td>23.5</td><td>°C</td><td>Sala A</td><td>2026-03-18 14:30</td></tr>
+                                    <tr><td>sensor-test-001</td><td>humidity</td><td>65.2</td><td>%</td><td>Sala A</td><td>2026-03-18 14:30</td></tr>
+                                    <tr><td>sensor-hum-002</td><td>humidity</td><td>72.1</td><td>%</td><td>Almacén B</td><td>2026-03-18 14:28</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- CREATE USER MODAL -->
+    <div class="modal-overlay" id="create-user-modal">
+        <div class="modal">
+            <div class="modal-header"><h3>Crear Usuario</h3><button class="modal-close" onclick="closeModal('create-user-modal')">&times;</button></div>
+            <div class="modal-body">
+                <div class="form-group"><label>Nombre</label><input placeholder="Nombre completo"></div>
+                <div class="form-group"><label>Email</label><input type="email" placeholder="usuario@iot-platform.local"></div>
+                <div class="form-group"><label>Contraseña (min 8, mayúsc., minúsc., dígito)</label><input type="password" placeholder="Contraseña segura"></div>
+                <div class="form-group"><label>Rol</label><select style="width:100%;padding:12px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:14px;background:var(--gray-50);"><option value="3">user</option></select></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-sm outline" onclick="closeModal('create-user-modal')">Cancelar</button>
+                <button class="btn-sm primary">Crear Usuario</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function handleLogin(e) { e.preventDefault(); document.getElementById('loginScreen').classList.add('hidden'); document.getElementById('dashboard').classList.add('active'); }
+        function handleLogout() { document.getElementById('loginScreen').classList.remove('hidden'); document.getElementById('dashboard').classList.remove('active'); }
+        function showPage(pageId) {
+            document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.getElementById(pageId).classList.add('active');
+            event.currentTarget.classList.add('active');
+            const titles = {'dashboard-home':'Dashboard','profile-page':'Mi Perfil','users-page':'Gestión de Usuarios','services-page':'Mis Servicios IoT','assign-users-page':'Asignar Usuarios a Servicios','assign-devices-page':'Asignar Dispositivos a Servicios','devices-page':'Dispositivos IoT','sensors-page':'Lecturas de Sensores'};
+            document.getElementById('pageTitle').textContent = titles[pageId] || 'Dashboard';
+        }
+        function openModal(id) { document.getElementById(id).classList.add('active'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+        document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', function(e) { if(e.target===this) closeModal(this.id); }));
+    </script>
+</body>
+</html>

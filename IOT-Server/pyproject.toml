@@ -1,0 +1,18 @@
+[project]
+name = "prog-seg-api"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "aiosqlite>=0.22.1",
+    "cryptography>=46.0.5",
+    "fastapi>=0.135.1",
+    "pydantic-settings>=2.13.1",
+    "sqlmodel>=0.0.37",
+    "uvicorn>=0.41.0",
+    "pyjwt>=2.10.1",
+    "bcrypt>=4.0.0",
+    "pytest>=8.4.0",
+    "httpx>=0.28.1",
+]
