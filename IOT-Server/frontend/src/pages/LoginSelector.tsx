@@ -79,7 +79,7 @@ const LoginSelector = () => {
             }}
         >
             <Container maxWidth="md">
-                <Box textAlign="center" mb={5}>
+                <Box textAlign="center" mb={5} sx={{ animation: "fadeSlideUp 0.4s ease both" }}>
                     <Box
                         sx={{
                             width: 72,
@@ -113,17 +113,19 @@ const LoginSelector = () => {
                 </Box>
 
                 <Grid container spacing={3} justifyContent="center">
-                    {roles.map((role) => (
+                    {roles.map((role, idx) => (
                         <Grid item xs={12} sm={6} md={3} key={role.path}>
                             <Card
                                 elevation={0}
                                 sx={{
                                     border: "1px solid #e2e8f0",
                                     borderRadius: 3,
-                                    transition: "all 0.25s ease",
+                                    transition: "box-shadow 0.25s ease, border-color 0.25s ease",
+                                    cursor: "pointer",
+                                    animation: "fadeSlideUp 0.4s ease both",
+                                    animationDelay: `${idx * 0.08}s`,
                                     "&:hover": {
-                                        transform: "translateY(-4px)",
-                                        boxShadow: `0 12px 32px ${role.color}22`,
+                                        boxShadow: `0 8px 28px ${role.color}28`,
                                         borderColor: role.color,
                                     },
                                 }}

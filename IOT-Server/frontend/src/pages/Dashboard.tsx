@@ -17,9 +17,16 @@ import SensorsIcon from "@mui/icons-material/Sensors";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import SettingsIcon from "@mui/icons-material/Settings";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
+import MiscellaneousServicesIcon from "@mui/icons-material/MiscellaneousServices";
+import AppsIcon from "@mui/icons-material/Apps";
+import ConfirmationNumberIcon from "@mui/icons-material/ConfirmationNumber";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import AddTaskIcon from "@mui/icons-material/AddTask";
 import { useNavigate } from "react-router-dom";
 import { useMemo } from "react";
 import { useAuth } from "../shared/auth/authContext";
+import { useActivity } from "../shared/activity/activityContext";
 import { useGetQuery } from "../shared/api/functions";
 import { PageResponse, PersonalDataResponse, DeviceResponse } from "../shared/api/types";
 
@@ -99,11 +106,10 @@ function QuickAction({ title, subtitle, icon, iconBg, iconColor, onClick }: Quic
                 border: "1px solid",
                 borderColor: "divider",
                 cursor: "pointer",
-                transition: "all 0.2s",
+                transition: "box-shadow 0.2s, border-color 0.2s",
                 "&:hover": {
                     borderColor: "primary.main",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-                    transform: "translateY(-2px)",
+                    boxShadow: "0 6px 20px rgba(6,182,212,0.15)",
                 },
             }}
         >
@@ -156,84 +162,16 @@ export default function Dashboard() {
         { enabled: session?.accountType === "administrator" }
     );
 
-    /* ── Build activity feed from all entities ─────────── */
-    interface ActivityItem {
-        id: string;
-        label: string;
-        type: "device" | "user" | "manager" | "admin";
-        color: string;
-        icon: React.ReactNode;
-        createdAt: string;
-        updatedAt: string;
-        isNew: boolean;
-    }
+    const { events: activityEvents } = useActivity();
 
-    const recentActivity = useMemo(() => {
-        const items: ActivityItem[] = [];
-
-        devicesData?.data?.forEach((d) => {
-            items.push({
-                id: d.id,
-                label: d.name,
-                type: "device",
-                color: "#2563eb",
-                icon: <DevicesIcon sx={{ fontSize: 18 }} />,
-                createdAt: d.created_at,
-                updatedAt: d.updated_at,
-                isNew: d.created_at === d.updated_at,
-            });
-        });
-
-        usersData?.data?.forEach((u) => {
-            items.push({
-                id: u.id,
-                label: `${u.first_name} ${u.last_name}`,
-                type: "user",
-                color: "#059669",
-                icon: <PeopleIcon sx={{ fontSize: 18 }} />,
-                createdAt: u.created_at,
-                updatedAt: u.updated_at,
-                isNew: u.created_at === u.updated_at,
-            });
-        });
-
-        managersData?.data?.forEach((m) => {
-            items.push({
-                id: m.id,
-                label: `${m.first_name} ${m.last_name}`,
-                type: "manager",
-                color: "#d97706",
-                icon: <SupervisorAccountIcon sx={{ fontSize: 18 }} />,
-                createdAt: m.created_at,
-                updatedAt: m.updated_at,
-                isNew: m.created_at === m.updated_at,
-            });
-        });
-
-        adminsData?.data?.forEach((a) => {
-            items.push({
-                id: a.id,
-                label: `${a.first_name} ${a.last_name}`,
-                type: "admin",
-                color: "#0891b2",
-                icon: <ManageAccountsIcon sx={{ fontSize: 18 }} />,
-                createdAt: a.created_at,
-                updatedAt: a.updated_at,
-                isNew: a.created_at === a.updated_at,
-            });
-        });
-
-        // Sort by most recent activity (updated_at) descending
-        items.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-        return items.slice(0, 15);
-    }, [devicesData, usersData, managersData, adminsData]);
-
-    const typeLabels: Record<string, string> = {
-        device: "Dispositivo",
-        user: "Usuario",
-        manager: "Gerente",
-        admin: "Administrador",
+    const actionConfig: Record<string, { color: string; icon: React.ReactNode; label: string }> = {
+        created: { color: "#059669", icon: <AddTaskIcon sx={{ fontSize: 16 }} />, label: "Creado" },
+        edited:  { color: "#0891b2", icon: <EditOutlinedIcon sx={{ fontSize: 16 }} />, label: "Editado" },
+        deleted: { color: "#dc2626", icon: <DeleteOutlineIcon sx={{ fontSize: 16 }} />, label: "Eliminado" },
     };
+
+    // Keep useMemo to not break the existing counts
+    useMemo(() => {}, [devicesData, usersData, managersData, adminsData]);
 
     function formatTimeAgo(dateStr: string): string {
         const diff = Date.now() - new Date(dateStr).getTime();
@@ -266,18 +204,18 @@ export default function Dashboard() {
 
             {/* ── Stat Cards ─────────────────────────────────────── */}
             <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                <Grid item xs={12} sm={6} md={3}>
+                <Grid item xs={12} sm={6} md={4} sx={{ animation: "fadeSlideUp 0.4s ease both", animationDelay: "0s" }}>
                     <StatCard
                         title="Dispositivos IoT"
                         count={devicesData?.total}
                         icon={<DevicesIcon />}
-                        color="#2563eb"
-                        bgColor="#dbeafe"
+                        color="#06b6d4"
+                        bgColor="#cffafe"
                         subtitle={`↑ ${devicesData?.data?.filter((d) => d.is_active).length ?? 0} activos`}
                     />
                 </Grid>
                 {session?.accountType !== "user" && (
-                    <Grid item xs={12} sm={6} md={3}>
+                    <Grid item xs={12} sm={6} md={4} sx={{ animation: "fadeSlideUp 0.4s ease both", animationDelay: "0.08s" }}>
                         <StatCard
                             title="Usuarios"
                             count={usersData?.total}
@@ -288,7 +226,7 @@ export default function Dashboard() {
                     </Grid>
                 )}
                 {session?.accountType === "administrator" && (
-                    <Grid item xs={12} sm={6} md={3}>
+                    <Grid item xs={12} sm={6} md={4} sx={{ animation: "fadeSlideUp 0.4s ease both", animationDelay: "0.16s" }}>
                         <StatCard
                             title="Gerentes"
                             count={managersData?.total}
@@ -299,169 +237,182 @@ export default function Dashboard() {
                     </Grid>
                 )}
                 {session?.accountType === "administrator" && session.isMaster && (
-                    <Grid item xs={12} sm={6} md={3}>
+                    <Grid item xs={12} sm={6} md={4} sx={{ animation: "fadeSlideUp 0.4s ease both", animationDelay: "0.24s" }}>
                         <StatCard
                             title="Administradores"
                             count={adminsData?.total}
                             icon={<ManageAccountsIcon />}
-                            color="#0891b2"
-                            bgColor="#cffafe"
+                            color="#0f172a"
+                            bgColor="#e2e8f0"
                         />
                     </Grid>
                 )}
             </Grid>
 
-            {/* ── Two-column: Quick Actions + Activity ────────── */}
+            {/* ── Two-column: Quick Actions (Crear + Gestionar) ── */}
             <Grid container spacing={2.5} sx={{ mb: 3 }}>
-                {/* Quick Actions */}
-                {session?.accountType !== "user" && (
-                    <Grid item xs={12} md={6}>
-                        <Paper
-                            elevation={0}
-                            sx={{
-                                borderRadius: 3,
-                                border: "1px solid",
-                                borderColor: "divider",
-                            }}
-                        >
-                            <Box sx={{ px: 3, py: 2, borderBottom: "1px solid", borderColor: "divider" }}>
-                                <Typography variant="subtitle1" fontWeight={700}>
-                                    Acciones Rápidas — {roleLabel}
-                                </Typography>
-                            </Box>
-                            <Box sx={{ p: 2.5 }}>
-                                <Grid container spacing={1.5}>
+                {/* Crear nuevo */}
+                <Grid item xs={12} md={6}>
+                    <Paper elevation={0} sx={{ borderRadius: 3, border: "1px solid", borderColor: "divider" }}>
+                        <Box sx={{ px: 3, py: 2, borderBottom: "1px solid", borderColor: "divider" }}>
+                            <Typography variant="subtitle1" fontWeight={700}>Crear nuevo</Typography>
+                        </Box>
+                        <Box sx={{ p: 2.5 }}>
+                            <Grid container spacing={1.5}>
+                                {session?.accountType !== "user" && (
                                     <Grid item xs={6}>
-                                        <QuickAction
-                                            title="Crear Usuario"
-                                            subtitle="Registrar nuevo usuario"
-                                            icon={<PersonAddIcon />}
-                                            iconBg="#dbeafe"
-                                            iconColor="#2563eb"
-                                            onClick={() => navigate("/usuarios")}
-                                        />
+                                        <QuickAction title="Usuario" subtitle="Registrar nuevo usuario" icon={<PersonAddIcon />} iconBg="#dbeafe" iconColor="#2563eb" onClick={() => navigate("/usuarios")} />
                                     </Grid>
-                                    <Grid item xs={6}>
-                                        <QuickAction
-                                            title="Crear Dispositivo"
-                                            subtitle="Registrar dispositivo IoT"
-                                            icon={<AddCircleOutlineIcon />}
-                                            iconBg="#fef3c7"
-                                            iconColor="#d97706"
-                                            onClick={() => navigate("/dispositivos")}
-                                        />
-                                    </Grid>
-                                    {session?.accountType === "administrator" && (
-                                        <Grid item xs={6}>
-                                            <QuickAction
-                                                title="Crear Gerente"
-                                                subtitle="Asignar a servicios"
-                                                icon={<SupervisorAccountIcon />}
-                                                iconBg="#d1fae5"
-                                                iconColor="#059669"
-                                                onClick={() => navigate("/gerentes")}
-                                            />
-                                        </Grid>
-                                    )}
-                                    {session?.accountType === "administrator" && (
-                                        <Grid item xs={6}>
-                                            <QuickAction
-                                                title="Gestión"
-                                                subtitle="Roles y permisos"
-                                                icon={<SettingsIcon />}
-                                                iconBg="#ede9fe"
-                                                iconColor="#7c3aed"
-                                                onClick={() => navigate("/administradores")}
-                                            />
-                                        </Grid>
-                                    )}
+                                )}
+                                <Grid item xs={6}>
+                                    <QuickAction title="Dispositivo" subtitle="Nuevo dispositivo IoT" icon={<AddCircleOutlineIcon />} iconBg="#fef3c7" iconColor="#d97706" onClick={() => navigate("/dispositivos")} />
                                 </Grid>
-                            </Box>
-                        </Paper>
-                    </Grid>
-                )}
+                                <Grid item xs={6}>
+                                    <QuickAction title="Ticket" subtitle="Nuevo ticket de soporte" icon={<ConfirmationNumberIcon />} iconBg="#ede9fe" iconColor="#7c3aed" onClick={() => navigate("/tickets")} />
+                                </Grid>
+                                {session?.accountType === "administrator" && (
+                                    <Grid item xs={6}>
+                                        <QuickAction title="Servicio" subtitle="Registrar nuevo servicio" icon={<MiscellaneousServicesIcon />} iconBg="#d1fae5" iconColor="#059669" onClick={() => navigate("/servicios")} />
+                                    </Grid>
+                                )}
+                                {session?.accountType === "administrator" && (
+                                    <Grid item xs={6}>
+                                        <QuickAction title="Aplicación" subtitle="Registrar aplicación" icon={<AppsIcon />} iconBg="#cffafe" iconColor="#0891b2" onClick={() => navigate("/aplicaciones")} />
+                                    </Grid>
+                                )}
+                                {session?.accountType === "administrator" && (
+                                    <Grid item xs={6}>
+                                        <QuickAction title="Gerente" subtitle="Asignar nuevo gerente" icon={<SupervisorAccountIcon />} iconBg="#fce7f3" iconColor="#be185d" onClick={() => navigate("/gerentes")} />
+                                    </Grid>
+                                )}
+                            </Grid>
+                        </Box>
+                    </Paper>
+                </Grid>
 
-                {/* Activity Feed */}
-                <Grid item xs={12} md={session?.accountType === "user" ? 12 : 6}>
+                {/* Gestionar */}
+                <Grid item xs={12} md={6}>
+                    <Paper elevation={0} sx={{ borderRadius: 3, border: "1px solid", borderColor: "divider" }}>
+                        <Box sx={{ px: 3, py: 2, borderBottom: "1px solid", borderColor: "divider" }}>
+                            <Typography variant="subtitle1" fontWeight={700}>Gestionar</Typography>
+                        </Box>
+                        <Box sx={{ p: 2.5 }}>
+                            <Grid container spacing={1.5}>
+                                {session?.accountType !== "user" && (
+                                    <Grid item xs={6}>
+                                        <QuickAction title="Usuarios" subtitle="Administrar usuarios" icon={<PeopleIcon />} iconBg="#dbeafe" iconColor="#2563eb" onClick={() => navigate("/usuarios")} />
+                                    </Grid>
+                                )}
+                                <Grid item xs={6}>
+                                    <QuickAction title="Dispositivos" subtitle="Gestionar IoT" icon={<DevicesIcon />} iconBg="#fef3c7" iconColor="#d97706" onClick={() => navigate("/dispositivos")} />
+                                </Grid>
+                                <Grid item xs={6}>
+                                    <QuickAction title="Tickets" subtitle="Ver todos los tickets" icon={<ConfirmationNumberIcon />} iconBg="#ede9fe" iconColor="#7c3aed" onClick={() => navigate("/tickets")} />
+                                </Grid>
+                                {(session?.accountType === "administrator" || session?.accountType === "manager") && (
+                                    <Grid item xs={6}>
+                                        <QuickAction title="Servicios" subtitle="Gestionar servicios" icon={<MiscellaneousServicesIcon />} iconBg="#d1fae5" iconColor="#059669" onClick={() => navigate("/servicios")} />
+                                    </Grid>
+                                )}
+                                {(session?.accountType === "administrator" || session?.accountType === "manager") && (
+                                    <Grid item xs={6}>
+                                        <QuickAction title="Aplicaciones" subtitle="Gestionar apps" icon={<AppsIcon />} iconBg="#cffafe" iconColor="#0891b2" onClick={() => navigate("/aplicaciones")} />
+                                    </Grid>
+                                )}
+                                {session?.accountType === "administrator" && (
+                                    <Grid item xs={6}>
+                                        <QuickAction title="Gerentes" subtitle="Administrar gerentes" icon={<SupervisorAccountIcon />} iconBg="#fce7f3" iconColor="#be185d" onClick={() => navigate("/gerentes")} />
+                                    </Grid>
+                                )}
+                                {session?.accountType === "administrator" && session.isMaster && (
+                                    <Grid item xs={6}>
+                                        <QuickAction title="Administradores" subtitle="Gestión de admins" icon={<SettingsIcon />} iconBg="#e2e8f0" iconColor="#0f172a" onClick={() => navigate("/administradores")} />
+                                    </Grid>
+                                )}
+                            </Grid>
+                        </Box>
+                    </Paper>
+                </Grid>
+
+            </Grid>
+
+            {/* Activity Feed — full width */}
+            <Grid container spacing={2.5} sx={{ mb: 3 }}>
+                <Grid item xs={12}>
                     <Paper
                         elevation={0}
                         sx={{
                             borderRadius: 3,
                             border: "1px solid",
                             borderColor: "divider",
-                            maxHeight: 420,
+                            maxHeight: 380,
                             display: "flex",
                             flexDirection: "column",
                         }}
                     >
                         <Box sx={{ px: 3, py: 2, borderBottom: "1px solid", borderColor: "divider", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                            <Typography variant="subtitle1" fontWeight={700}>
-                                Actividad Reciente
-                            </Typography>
-                            <Chip label={`${recentActivity.length} registros`} size="small" />
+                            <Typography variant="subtitle1" fontWeight={700}>Actividad Reciente</Typography>
+                            <Chip label={`${activityEvents.length} acciones`} size="small" />
                         </Box>
                         <List dense sx={{ overflow: "auto", flex: 1, px: 1 }}>
-                            {recentActivity.length === 0 ? (
+                            {activityEvents.length === 0 ? (
                                 <ListItem sx={{ px: 2, py: 3, justifyContent: "center" }}>
                                     <Typography variant="body2" color="text.secondary">
-                                        No hay actividad registrada aún
+                                        No hay acciones registradas aún. Las creaciones, ediciones y eliminaciones aparecerán aquí.
                                     </Typography>
                                 </ListItem>
                             ) : (
-                                recentActivity.map((item) => (
-                                    <ListItem
-                                        key={`${item.type}-${item.id}`}
-                                        sx={{
-                                            px: 2,
-                                            py: 1,
-                                            borderBottom: "1px solid",
-                                            borderColor: "divider",
-                                            "&:last-child": { borderBottom: 0 },
-                                        }}
-                                    >
-                                        <ListItemIcon sx={{ minWidth: 36 }}>
-                                            <Box
-                                                sx={{
-                                                    width: 30,
-                                                    height: 30,
-                                                    borderRadius: 1.5,
-                                                    bgcolor: `${item.color}15`,
-                                                    color: item.color,
-                                                    display: "flex",
-                                                    alignItems: "center",
-                                                    justifyContent: "center",
-                                                }}
-                                            >
-                                                {item.icon}
-                                            </Box>
-                                        </ListItemIcon>
-                                        <ListItemText
-                                            primary={
-                                                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                                                    <Typography variant="body2" fontWeight={600} noWrap>
-                                                        {item.label}
-                                                    </Typography>
-                                                    <Chip
-                                                        label={typeLabels[item.type]}
-                                                        size="small"
-                                                        sx={{
-                                                            height: 20,
-                                                            fontSize: 10,
-                                                            fontWeight: 600,
-                                                            bgcolor: `${item.color}15`,
-                                                            color: item.color,
-                                                        }}
-                                                    />
+                                activityEvents.map((event) => {
+                                    const cfg = actionConfig[event.action];
+                                    return (
+                                        <ListItem
+                                            key={event.id}
+                                            sx={{
+                                                px: 2,
+                                                py: 1,
+                                                borderBottom: "1px solid",
+                                                borderColor: "divider",
+                                                "&:last-child": { borderBottom: 0 },
+                                            }}
+                                        >
+                                            <ListItemIcon sx={{ minWidth: 36 }}>
+                                                <Box
+                                                    sx={{
+                                                        width: 30,
+                                                        height: 30,
+                                                        borderRadius: 1.5,
+                                                        bgcolor: `${cfg.color}18`,
+                                                        color: cfg.color,
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        justifyContent: "center",
+                                                    }}
+                                                >
+                                                    {cfg.icon}
                                                 </Box>
-                                            }
-                                            secondary={
-                                                <Typography variant="caption" color="text.secondary">
-                                                    {item.isNew ? "Creado" : "Actualizado"} · {formatTimeAgo(item.updatedAt)}
-                                                </Typography>
-                                            }
-                                        />
-                                    </ListItem>
-                                ))
+                                            </ListItemIcon>
+                                            <ListItemText
+                                                primary={
+                                                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                                        <Typography variant="body2" fontWeight={600} noWrap>
+                                                            {event.entityName}
+                                                        </Typography>
+                                                        <Chip
+                                                            label={event.entityType}
+                                                            size="small"
+                                                            sx={{ height: 20, fontSize: 10, fontWeight: 600, bgcolor: `${cfg.color}15`, color: cfg.color }}
+                                                        />
+                                                    </Box>
+                                                }
+                                                secondary={
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        {cfg.label} · {formatTimeAgo(event.timestamp)}
+                                                    </Typography>
+                                                }
+                                            />
+                                        </ListItem>
+                                    );
+                                })
                             )}
                         </List>
                     </Paper>

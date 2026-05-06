@@ -54,6 +54,7 @@ const LoginBase = ({ config }: LoginBaseProps) => {
                 alignItems: "center",
                 background: config.bgGradient,
                 position: "relative",
+                overflow: "hidden",
                 "&::before": {
                     content: '""',
                     position: "absolute",
@@ -63,6 +64,19 @@ const LoginBase = ({ config }: LoginBaseProps) => {
                     height: 300,
                     borderRadius: "50%",
                     background: `radial-gradient(circle, ${config.primary}0F 0%, transparent 70%)`,
+                    pointerEvents: "none",
+                },
+                /* diagonal geometric decoration */
+                "&::after": {
+                    content: '""',
+                    position: "absolute",
+                    bottom: "-60px",
+                    left: "-40px",
+                    width: 280,
+                    height: 280,
+                    background: `linear-gradient(135deg, ${config.primary}18 0%, transparent 60%)`,
+                    transform: "rotate(-20deg)",
+                    borderRadius: "40% 60% 60% 40% / 40% 40% 60% 60%",
                     pointerEvents: "none",
                 },
             }}
@@ -80,6 +94,9 @@ const LoginBase = ({ config }: LoginBaseProps) => {
                     bgcolor: "#fff",
                     textAlign: "center",
                     border: "1px solid #e2e8f0",
+                    animation: "fadeSlideUp 0.45s ease both",
+                    position: "relative",
+                    zIndex: 1,
                 }}
             >
                 {/* Logo icon */}
@@ -240,9 +257,10 @@ const LoginBase = ({ config }: LoginBaseProps) => {
                         bgcolor: config.primary,
                         boxShadow: `0 4px 12px ${config.primary}40`,
                         textTransform: "none",
+                        cursor: "pointer",
                         "&:hover": {
                             bgcolor: config.primaryDark,
-                            boxShadow: `0 6px 20px ${config.primary}4D`,
+                            boxShadow: `0 8px 24px ${config.primary}4D`,
                         },
                     }}
                 >

@@ -65,6 +65,8 @@ export default function Administradores() {
             canDelete={session?.isMaster === true}
             selfId={session?.accountId}
             getEntityName={(row) => `${row.first_name} ${row.last_name}`}
+            showDetail={true}
+            entityTypeLabel="Administrador"
         />
     );
 }

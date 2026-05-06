@@ -1,10 +1,12 @@
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 from app.shared.base_domain.model import BaseTable
 from datetime import datetime
 from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
 from app.database.format import UserPlainAttribute
+from app.domain.auth.security import get_password_hash
+import secrets
 
 
 class NonCriticalPersonalData(BaseTable, table=True):
@@ -53,6 +55,28 @@ class SensitiveData(BaseTable, table=True):
         back_populates="sensitive_data",
         sa_relationship_kwargs={"lazy": "selectin"},
     )
+
+    def __init__(self, **data: Any):
+        password = data.pop("password", None)
+        if password is not None:
+            data["password_hash"] = get_password_hash(password)
+        super().__init__(**data)
+
+    def sqlmodel_update(self, obj: dict[str, Any], *, update: dict[str, Any] | None = None) -> None:
+        password = obj.pop("password", None)
+        super().sqlmodel_update(obj, update=update)
+        if password is not None:
+            self.password = password
+
+    @property
+    def password(self) -> str:
+        raise AttributeError("password is write-only")
+
+    @password.setter
+    def password(self, plain_password: str) -> None:
+        if plain_password.startswith("$2"):
+            raise ValueError("password must be provided in plain text")
+        self.password_hash = get_password_hash(plain_password)
 
 
 class PersonalData(BaseTable, UserPlainAttribute):
@@ -152,14 +176,19 @@ class ManagerService(BaseTable, table=True):
         sa_relationship_kwargs={"lazy": "selectin"},
     )
 
+def get_api_key():
+    return secrets.token_hex(32)
+
 
 class Application(BaseTable, table=True):
     __tablename__ = "application"  # pyright: ignore[reportAssignmentType]
 
     name: str = Field(unique=True)
-    version: str | None = None
-    url: str | None = None
-    description: str | None = None
+    version: str 
+    url: str 
+    description: str 
+    api_key: str = Field(default_factory=get_api_key, unique=True, index=True)
+    port: int | None = Field(default=None)
     administrator_id: UUID = Field(foreign_key="administrator.id")
     is_active: bool = Field(default=True)
 
@@ -198,6 +227,7 @@ class Device(BaseTable, table=True):
     serial_number: str | None = Field(default=None, unique=True)
     ip: str | None = None
     mac: str | None = Field(default=None, unique=True)
+    encryption_key: str | None = None
     is_active: bool = Field(default=True)
 
     device_services: list["DeviceService"] = Relationship(
@@ -235,28 +265,13 @@ class Role(BaseTable, table=True):
         back_populates="roles",
         sa_relationship_kwargs={"lazy": "selectin"},
     )
-    permission: Optional["RolePermission"] = Relationship(
-        back_populates="role",
-        sa_relationship_kwargs={"lazy": "selectin"},
-    )
     user_roles: list["UserRole"] = Relationship(
         back_populates="role",
         sa_relationship_kwargs={"lazy": "selectin"},
     )
 
 
-class RolePermission(BaseTable, table=True):
-    __tablename__ = "role_permission"  # pyright: ignore[reportAssignmentType]
 
-    role_id: UUID = Field(foreign_key="role.id", unique=True)
-    can_read: bool = Field(default=False)
-    can_write: bool = Field(default=False)
-    can_delete: bool = Field(default=False)
-    can_administer: bool = Field(default=False)
-    role: Role = Relationship(
-        back_populates="permission",
-        sa_relationship_kwargs={"lazy": "selectin"},
-    )
 
 
 class UserRole(BaseTable, table=True):
