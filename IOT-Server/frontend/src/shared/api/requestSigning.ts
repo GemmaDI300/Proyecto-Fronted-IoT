@@ -41,7 +41,7 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 /** SHA-256 de un Uint8Array → Uint8Array. */
 async function sha256(data: Uint8Array): Promise<Uint8Array> {
-    return new Uint8Array(await crypto.subtle.digest("SHA-256", data));
+    return new Uint8Array(await crypto.subtle.digest("SHA-256", data.buffer as ArrayBuffer));
 }
 
 /**
@@ -52,7 +52,7 @@ async function deriveEncKey(jwt: string): Promise<CryptoKey> {
     const keyBytes = await sha256(ENC.encode("iot-enc-v1:" + jwt));
     return crypto.subtle.importKey(
         "raw",
-        keyBytes,
+        keyBytes.buffer as ArrayBuffer,
         { name: "AES-CBC" },
         false,
         ["encrypt"],
@@ -67,7 +67,7 @@ async function deriveSessApp(jwt: string): Promise<CryptoKey> {
     const keyBytes = await sha256(ENC.encode("iot-sess-v1:" + jwt));
     return crypto.subtle.importKey(
         "raw",
-        keyBytes,
+        keyBytes.buffer as ArrayBuffer,
         { name: "HMAC", hash: "SHA-256" },
         false,
         ["sign"],
@@ -101,7 +101,7 @@ export async function buildSignedHeaders(
     const iv = crypto.getRandomValues(new Uint8Array(16));
     const plaintext = ENC.encode(bodyJson.length > 0 ? bodyJson : "{}");
     const ciphertext = new Uint8Array(
-        await crypto.subtle.encrypt({ name: "AES-CBC", iv }, encKey, plaintext),
+        await crypto.subtle.encrypt({ name: "AES-CBC", iv: iv.buffer as ArrayBuffer }, encKey, plaintext.buffer as ArrayBuffer),
     );
     const PLcifrado = bytesToBase64(iv) + ":" + bytesToBase64(ciphertext);
 
@@ -112,7 +112,7 @@ export async function buildSignedHeaders(
     // Paso 4 — TAG = HMAC-SHA256(SessApp, PG)
     const sessApp = await deriveSessApp(jwt);
     const tagBytes = new Uint8Array(
-        await crypto.subtle.sign("HMAC", sessApp, ENC.encode(PG)),
+        await crypto.subtle.sign("HMAC", sessApp, ENC.encode(PG).buffer as ArrayBuffer),
     );
     const TAG = bytesToHex(tagBytes);
 

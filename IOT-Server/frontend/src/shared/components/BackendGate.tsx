@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, ReactNode } from "react";
+import React, { useEffect, useState, useCallback, ReactNode, createContext, useContext } from "react";
 import {
     Box,
     CircularProgress,
@@ -7,7 +7,11 @@ import {
     Alert,
 } from "@mui/material";
 import SecurityIcon from "@mui/icons-material/Security";
-import { verifyBackendWithPuzzle } from "../services/backendVerification";
+import { verifyBackendWithPuzzle, isRcSessionValid, markRcSessionValid, clearRcSession } from "../services/backendVerification";
+
+/** true = sin credenciales RC (modo configuración inicial). */
+export const SetupModeContext = createContext<boolean>(false);
+export const useSetupMode = () => useContext(SetupModeContext);
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
 const APPLICATION_ID = import.meta.env.VITE_APP_APPLICATION_ID as string | undefined;
@@ -35,10 +39,17 @@ export const BackendGate: React.FC<BackendGateProps> = ({ children }) => {
     const [status, setStatus] = useState<VerificationStatus>("pending");
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-    const runVerification = useCallback(async () => {
-        // Sin credenciales configuradas → omitir (modo desarrollo)
+    const runVerification = useCallback(async (force = false) => {
+        // Sin credenciales configuradas → omitir (modo configuración inicial)
         if (!APPLICATION_ID || !API_KEY || !SERVER_KEY) {
             setStatus("unconfigured");
+            return;
+        }
+
+        // Omitir si ya hay una verificación RC válida en localStorage (compartido entre pestañas).
+        // Evita el rechazo 401 por sesión RC activa en Valkey y el doble puzzle al abrir nuevas pestañas.
+        if (!force && isRcSessionValid()) {
+            setStatus("verified");
             return;
         }
 
@@ -54,6 +65,7 @@ export const BackendGate: React.FC<BackendGateProps> = ({ children }) => {
             );
 
             if (ok) {
+                markRcSessionValid();
                 setStatus("verified");
             } else {
                 setStatus("failed");
@@ -121,7 +133,10 @@ export const BackendGate: React.FC<BackendGateProps> = ({ children }) => {
                 <Button
                     variant="contained"
                     color="primary"
-                    onClick={() => void runVerification()}
+                    onClick={() => {
+                        clearRcSession();
+                        void runVerification(true);
+                    }}
                 >
                     Reintentar verificación
                 </Button>
@@ -130,5 +145,9 @@ export const BackendGate: React.FC<BackendGateProps> = ({ children }) => {
     }
 
     // ── Estado: verificado o sin configurar → mostrar la app ────────
-    return <>{children}</>;
+    return (
+        <SetupModeContext.Provider value={status === "unconfigured"}>
+            {children}
+        </SetupModeContext.Provider>
+    );
 };

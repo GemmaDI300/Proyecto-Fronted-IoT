@@ -7,7 +7,8 @@ import { AuthProvider } from "./shared/auth/authContext";
 import { ActivityProvider } from "./shared/activity/activityContext";
 import ProtectedRoute from "./shared/auth/ProtectedRoute";
 import SidebarLayout, { NavItem } from "./components/SidebarLayout";
-import { BackendGate } from "./shared/components/BackendGate";
+import { BackendGate, useSetupMode } from "./shared/components/BackendGate";
+import { Navigate } from "react-router-dom";
 
 // Lazy loading de páginas de login (menos críticas)
 const LoginAdminMaster = lazy(() => import("./pages/login/LoginAdminMaster"));
@@ -170,6 +171,7 @@ const LoadingFallback = () => (
 );
 
 function MainApp() {
+    const isSetupMode = useSetupMode();
     return (
         <Suspense fallback={<LoadingFallback />}>
             <Routes>
@@ -183,50 +185,26 @@ function MainApp() {
                     element={
                         <SidebarLayout navItems={navItems}>
                             <Routes>
-                                <Route path="/" element={<ProtectedRoute element={Dashboard} />} />
-                                <Route
-                                    path="/usuarios"
-                                    element={<ProtectedRoute element={Usuarios} />}
-                                />
-                                <Route
-                                    path="/dispositivos"
-                                    element={<ProtectedRoute element={Dispositivos} />}
-                                />
-                                <Route
-                                    path="/administradores"
-                                    element={
-                                        <ProtectedRoute
-                                            element={Administradores}
-                                            requiredType="administrator"
-                                            requireMaster
-                                        />
-                                    }
-                                />
-                                <Route
-                                    path="/gerentes"
-                                    element={
-                                        <ProtectedRoute
-                                            element={Gerentes}
-                                            requiredType="administrator"
-                                        />
-                                    }
-                                />
-                                <Route
-                                    path="/servicios"
-                                    element={<ProtectedRoute element={Servicios} />}
-                                />
-                                <Route
-                                    path="/aplicaciones"
-                                    element={<ProtectedRoute element={Aplicaciones} />}
-                                />
-                                <Route
-                                    path="/roles"
-                                    element={<ProtectedRoute element={Roles} />}
-                                />
-                                <Route
-                                    path="/tickets"
-                                    element={<ProtectedRoute element={Tickets} />}
-                                />
+                                {isSetupMode ? (
+                                    /* Modo configuración inicial: solo Aplicaciones */
+                                    <>
+                                        <Route path="/aplicaciones" element={<ProtectedRoute element={Aplicaciones} />} />
+                                        <Route path="*" element={<Navigate to="/aplicaciones" replace />} />
+                                    </>
+                                ) : (
+                                    /* Modo normal: todas las rutas disponibles */
+                                    <>
+                                        <Route path="/" element={<ProtectedRoute element={Dashboard} />} />
+                                        <Route path="/usuarios" element={<ProtectedRoute element={Usuarios} />} />
+                                        <Route path="/dispositivos" element={<ProtectedRoute element={Dispositivos} />} />
+                                        <Route path="/administradores" element={<ProtectedRoute element={Administradores} requiredType="administrator" requireMaster />} />
+                                        <Route path="/gerentes" element={<ProtectedRoute element={Gerentes} requiredType="administrator" />} />
+                                        <Route path="/servicios" element={<ProtectedRoute element={Servicios} />} />
+                                        <Route path="/aplicaciones" element={<ProtectedRoute element={Aplicaciones} />} />
+                                        <Route path="/roles" element={<ProtectedRoute element={Roles} />} />
+                                        <Route path="/tickets" element={<ProtectedRoute element={Tickets} />} />
+                                    </>
+                                )}
                             </Routes>
                         </SidebarLayout>
                     }

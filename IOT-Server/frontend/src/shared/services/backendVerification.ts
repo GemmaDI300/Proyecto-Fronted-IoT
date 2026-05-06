@@ -148,3 +148,41 @@ export async function verifyBackendWithPuzzle(
         return false;
     }
 }
+
+// ── Helpers de sesión RC ────────────────────────────────────────────────────
+//
+// El backend (Valkey) mantiene una sola sesión RC activa por application_id.
+// Ejecutar el puzzle más de una vez mientras esa sesión esté viva devuelve 401.
+// Usamos localStorage con TTL para evitar re-verificaciones innecesarias:
+//   - Compartido entre pestañas (a diferencia de sessionStorage).
+//   - TTL de 55 min — la sesión RC del backend expira a los 60 min (ACCESS_TOKEN_EXPIRE_MINUTES).
+//   - En un despliegue nuevo con Valkey limpio, el TTL habrá expirado o localStorage
+//     estará vacío → el puzzle se ejecuta exactamente una vez y todo funciona.
+
+const RC_LS_KEY = "rc_verified_at";
+const RC_TTL_MS = 55 * 60 * 1000; // 55 minutos
+
+/** Devuelve true si existe una verificación RC válida y no expirada. */
+export function isRcSessionValid(): boolean {
+    try {
+        const raw = localStorage.getItem(RC_LS_KEY);
+        if (!raw) return false;
+        return Date.now() - Number(raw) < RC_TTL_MS;
+    } catch {
+        return false;
+    }
+}
+
+/** Registra la verificación RC como exitosa con timestamp actual. */
+export function markRcSessionValid(): void {
+    try {
+        localStorage.setItem(RC_LS_KEY, String(Date.now()));
+    } catch { /* ignore — entornos sin localStorage (SSR, pruebas) */ }
+}
+
+/** Elimina la marca de verificación RC (fuerza re-verificación en la próxima carga). */
+export function clearRcSession(): void {
+    try {
+        localStorage.removeItem(RC_LS_KEY);
+    } catch { /* ignore */ }
+}

@@ -17,6 +17,7 @@ import {
     ListItemButton,
     Chip,
     Avatar,
+    Alert,
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
@@ -24,6 +25,7 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import LockResetIcon from "@mui/icons-material/LockReset";
 import CambiarPasswordDialog from "./CambiarPasswordDialog";
 import { useAuth } from "../shared/auth/authContext";
+import { useSetupMode } from "../shared/components/BackendGate";
 
 export interface NavItem {
     text: string;
@@ -66,6 +68,7 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({
     const [open, setOpen] = React.useState(!isMobile);
     const [changePwOpen, setChangePwOpen] = React.useState(false);
     const { logout, session } = useAuth();
+    const isSetupMode = useSetupMode();
 
     const handleDrawerToggle = () => setOpen(!open);
 
@@ -82,6 +85,7 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({
     };
 
     const visibleItems = navItems.filter((item) => {
+        if (isSetupMode) return item.path === "/aplicaciones";
         if (!item.allowedTypes) return true;
         if (!session) return false;
         if (item.requireMaster && !session.isMaster) return false;
@@ -214,6 +218,14 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({
                 </Box>
 
                 <Divider />
+
+                {/* Banner de modo configuración inicial */}
+                {isSetupMode && (
+                    <Alert severity="warning" sx={{ borderRadius: 0, fontSize: 12, py: 1 }}>
+                        <strong>Modo configuración inicial</strong><br />
+                        Crea una Application para activar el sistema completo.
+                    </Alert>
+                )}
 
                 {/* Nav sections */}
                 <Box sx={{ flex: 1, overflow: "auto", py: 1 }}>

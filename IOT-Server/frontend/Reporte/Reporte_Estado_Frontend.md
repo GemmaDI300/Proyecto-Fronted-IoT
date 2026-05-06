@@ -1649,3 +1649,232 @@ El `.catch(() => ({}))` garantiza degradación graceful: si Web Crypto API no es
 | Cambio de contraseña | ✅ Diálogo disponible | ✅ Sin cambios |
 | Búsqueda en sidebar | ❌ Sin funcionalidad | ❌ Pendiente |
 | UserRole / ManagerService | ❌ Sin endpoints backend | ❌ Pendiente |
+
+---
+
+## 18. Actualización — Modo Configuración Inicial (5 de mayo de 2026)
+
+**Motivo:** En la Fase 1 del arranque desde cero, las variables de entorno `VITE_APP_APPLICATION_ID`, `VITE_APP_API_KEY` y `VITE_APP_SERVER_KEY` están vacías porque aún no existe ninguna `Application` registrada. El frontend arrancaba completamente funcional en este estado, dando acceso a todos los módulos sin que el `BackendGate` hubiera verificado la autenticidad del servidor. Se implementó un **modo configuración inicial** que restringe la UI exclusivamente a la pantalla de Aplicaciones mientras las credenciales RC no estén configuradas.
+
+---
+
+### 18.1 Problema anterior
+
+| Situación | Comportamiento anterior | Comportamiento esperado |
+|---|---|---|
+| Variables RC vacías | `BackendGate` omite verificación y renderiza toda la app | Solo mostrar lo mínimo para crear la Application |
+| Navegación en setup | Todos los módulos accesibles (Dashboard, Usuarios, etc.) | Solo Aplicaciones accesible |
+| Sidebar | Todos los ítems visibles | Solo ítem Aplicaciones visible |
+| Redirección | Rutas habituales funcionan | Cualquier ruta redirige a `/aplicaciones` |
+
+---
+
+### 18.2 Cambios implementados
+
+#### `src/shared/components/BackendGate.tsx`
+
+Se exportaron dos nuevos elementos del módulo:
+
+```typescript
+/** true = sin credenciales RC (modo configuración inicial). */
+export const SetupModeContext = createContext<boolean>(false);
+export const useSetupMode = () => useContext(SetupModeContext);
+```
+
+El provider envuelve los children con el valor del contexto:
+
+```typescript
+// Antes:
+return <>{children}</>;
+
+// Después:
+return (
+    <SetupModeContext.Provider value={status === "unconfigured"}>
+        {children}
+    </SetupModeContext.Provider>
+);
+```
+
+Cuando las 3 variables RC están vacías, `status` es `"unconfigured"` y el contexto propaga `true` a toda la app.
+
+#### `src/components/SidebarLayout.tsx`
+
+Se importó `useSetupMode` y se añadieron dos cambios:
+
+**1. Filtro de ítems de navegación:**
+```typescript
+const visibleItems = navItems.filter((item) => {
+    if (isSetupMode) return item.path === "/aplicaciones";
+    // ... lógica normal de allowedTypes ...
+});
+```
+
+**2. Banner de advertencia en el drawer:**
+```tsx
+{isSetupMode && (
+    <Alert severity="warning" sx={{ borderRadius: 0, fontSize: 12, py: 1 }}>
+        <strong>Modo configuración inicial</strong><br />
+        Crea una Application para activar el sistema completo.
+    </Alert>
+)}
+```
+
+#### `src/main.tsx`
+
+Se importó `useSetupMode` y `Navigate`. Las rutas dentro de `SidebarLayout` ahora tienen dos ramas:
+
+```tsx
+{isSetupMode ? (
+    // Modo configuración inicial: solo Aplicaciones
+    <>
+        <Route path="/aplicaciones" element={<ProtectedRoute element={Aplicaciones} />} />
+        <Route path="*" element={<Navigate to="/aplicaciones" replace />} />
+    </>
+) : (
+    // Modo normal: todas las rutas disponibles
+    <>
+        <Route path="/" element={<ProtectedRoute element={Dashboard} />} />
+        <Route path="/usuarios" ... />
+        {/* ... resto de rutas ... */}
+    </>
+)}
+```
+
+---
+
+### 18.3 Comportamiento por estado
+
+| Estado del sistema | `isSetupMode` | Sidebar | Rutas disponibles | BackendGate |
+|---|---|---|---|---|
+| Variables RC vacías | `true` | Solo "Aplicaciones" + banner amarillo | `/aplicaciones` (resto redirige aquí) | Omite verificación |
+| Variables RC configuradas + puzzle OK | `false` | Todos los módulos según rol | Todas las rutas normales | Verificado ✅ |
+| Variables RC configuradas + puzzle FAIL | — | — | App bloqueada (pantalla de error) | Falla ❌ |
+
+---
+
+### 18.4 Archivos modificados
+
+| Archivo | Cambio |
+|---|---|
+| `src/shared/components/BackendGate.tsx` | Exporta `SetupModeContext` y `useSetupMode`; envuelve children en el Provider con `value={status === "unconfigured"}` |
+| `src/components/SidebarLayout.tsx` | Importa `useSetupMode`; filtro de navItems en setup mode; banner `Alert` amarillo en el drawer |
+| `src/main.tsx` | Importa `useSetupMode` y `Navigate`; rutas condicionales según `isSetupMode` |
+
+---
+
+### 18.5 Estado de funcionalidades tras esta actualización
+
+| Funcionalidad | Estado |
+|---|---|
+| Modo configuración inicial (sin credenciales RC) | ✅ Solo muestra Aplicaciones; todo lo demás bloqueado |
+| Modo normal (con credenciales RC verificadas) | ✅ Todos los módulos disponibles según rol |
+| Bloqueo total si puzzle falla | ✅ Pantalla de error con botón Reintentar |
+| Banner visual de setup mode | ✅ Alert amarillo en sidebar |
+| Redirección automática en setup mode | ✅ Cualquier ruta → `/aplicaciones` |
+
+---
+
+## 19. Fase 2 — Configuracion RC completa (5 de mayo de 2026)
+
+### 19.1 Contexto
+
+Tras completar la Fase 1 (sistema en modo configuracion inicial), el siguiente paso
+fue obtener las credenciales RC de la Application creada y configurar el frontend para
+verificar la autenticidad del backend en cada arranque.
+
+### 19.2 Extraccion de credenciales
+
+Los tres valores requeridos se obtienen de fuentes distintas:
+
+| Variable | Origen | Metodo de obtencion |
+|---|---|---|
+| `VITE_APP_APPLICATION_ID` | Tabla `application` en SQLite | `docker exec iot-backend python3 -c "import sqlite3; c=sqlite3.connect('/app/data/iot.db'); print(c.execute('SELECT id FROM application').fetchall())"` |
+| `VITE_APP_API_KEY` | Campo `api_key` en SQLite (generado al crear) | Misma query incluyendo la columna `api_key` |
+| `VITE_APP_SERVER_KEY` | Derivado de `SECRET_KEY` del backend | `docker exec iot-backend python3 -c "import hashlib,os; print(hashlib.sha256((os.environ['SECRET_KEY']+'|puzzle_v1').encode()).hexdigest())"` |
+
+> **Nota de seguridad:** `VITE_APP_SERVER_KEY` nunca se almacena en la base de datos.
+> Es una derivacion determinista de `SECRET_KEY + "|puzzle_v1"` via SHA-256. Si cambia
+> `SECRET_KEY` en el backend, el `server_key` cambia y hay que recalcular.
+
+#### Valores obtenidos (Application "IoT Frontend")
+
+| Variable | Valor |
+|---|---|
+| `VITE_APP_APPLICATION_ID` | `00cc9e54b352407fa81e62b173798aec` |
+| `VITE_APP_API_KEY` | `256b8b912178fd27e20955765afb716c555e2e166735a0230e67371d47adb290` |
+| `VITE_APP_SERVER_KEY` | `8269a34f97e745a6c2b7df5be5184f76f878f647d356cfe46a10bf0022c680d4` |
+
+### 19.3 Cambios en docker-compose.yml
+
+Se anadieron las tres variables RC al bloque `args` del servicio `frontend`:
+
+`yaml
+frontend:
+  build:
+    context: ./frontend
+    dockerfile: Dockerfile.test
+    args:
+      VITE_API_BASE_URL: /api/v1/
+      VITE_APP_APPLICATION_ID: "00cc9e54b352407fa81e62b173798aec"
+      VITE_APP_API_KEY: "256b8b912178fd27e20955765afb716c555e2e166735a0230e67371d47adb290"
+      VITE_APP_SERVER_KEY: "8269a34f97e745a6c2b7df5be5184f76f878f647d356cfe46a10bf0022c680d4"
+`
+
+Estas variables se inyectan en tiempo de build como `import.meta.env.*` via Vite.
+El Dockerfile.test las declara como `ARG` y las pasa a `vite build` como variables de entorno.
+
+### 19.4 Panel de credenciales en Aplicaciones.tsx
+
+Para facilitar futuras configuraciones (nuevas instancias, recuperacion de credenciales),
+se anadio un panel de visualizacion directamente en la pagina de Aplicaciones que solo
+se activa en setup mode (variables RC vacias).
+
+**Componente `SetupCredentialsPanel`:**
+
+| Elemento | Descripcion |
+|---|---|
+| Tarjeta amarilla con icono de llave | Solo visible cuando `isSetupMode = true` y hay Applications creadas |
+| Campo `VITE_APP_APPLICATION_ID` | Muestra el UUID completo con boton de copiar al portapapeles |
+| Campo `VITE_APP_API_KEY` | Muestra la clave hex completa con boton de copiar |
+| Bloque de terminal | Comando para calcular `VITE_APP_SERVER_KEY` (seleccionable, texto monoespacio oscuro) |
+| Alerta instructiva | Indica exactamente que editar en `docker-compose.yml` y que comando ejecutar |
+
+**Componente `CopyField`:**
+- Clic en icono copia el valor al portapapeles del navegador via `navigator.clipboard.writeText`
+- El icono cambia a verde durante 2 segundos para confirmar la copia
+
+**Logica de visibilidad:**
+
+`	sx
+// Solo en setup mode y con apps ya creadas
+{isSetupMode && apps.length > 0 && <SetupCredentialsPanel apps={apps} />}
+
+// Si aun no hay apps, guia para crear la primera
+{isSetupMode && apps.length === 0 && <Alert severity="info">...</Alert>}
+`
+
+### 19.5 Archivos modificados
+
+| Archivo | Tipo de cambio | Descripcion |
+|---|---|---|
+| `IOT-Server/docker-compose.yml` | Configuracion | Anadidas 3 variables RC en `args` del servicio frontend |
+| `frontend/src/pages/Aplicaciones.tsx` | Funcionalidad | Panel de credenciales copiables en setup mode |
+
+### 19.6 Reconstruccion y verificacion
+
+`powershell
+docker compose build frontend   # Build exitoso: 1700 modulos, ~24s
+docker compose up -d frontend   # Contenedor iot-frontend Started
+`
+
+**Estado tras la Fase 2:**
+
+| Servicio | Estado |
+|---|---|
+| iot-valkey | Healthy |
+| iot-backend | Healthy |
+| iot-frontend | Started (RC verificado en cada carga) |
+
+**Comportamiento del frontend tras Fase 2:**
+`BackendGate` ejecuta el puzzle AES-256-CBC + HMAC-SHA256 contra `POST /api/v1/applications/auth`.
+Si el backend devuelve `{ valid: true }`, el sistema entra en modo normal con todos los modulos disponibles.

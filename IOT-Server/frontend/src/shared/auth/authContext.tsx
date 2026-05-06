@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { SessionCredentials, TokenResponse } from "../api/types";
-import { verifyBackendWithPuzzle } from "../services/backendVerification";
+import { verifyBackendWithPuzzle, isRcSessionValid, markRcSessionValid } from "../services/backendVerification";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const RC_APPLICATION_ID = import.meta.env.VITE_APP_APPLICATION_ID as string | undefined;
@@ -82,15 +82,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const mutation = useMutation({
         mutationFn: async (credentials: { email: string; password: string; endpoint: string }) => {
-            // Verificación RC: confirmar que el backend es el original antes de enviar credenciales
+            // Verificación RC: confirmar que el backend es el original antes de enviar credenciales.
+            // Si ya fue verificado en esta sesión de navegador (sessionStorage), omitir el puzzle
+            // para evitar el rechazo 401 por sesión RC activa en Valkey.
             if (RC_APPLICATION_ID && RC_API_KEY && RC_SERVER_KEY) {
-                const backendOk = await verifyBackendWithPuzzle(
-                    API_BASE_URL, RC_APPLICATION_ID, RC_API_KEY, RC_SERVER_KEY,
-                );
-                if (!backendOk) {
-                    throw new Error(
-                        "No se pudo verificar la autenticidad del servidor. Conexión rechazada.",
+                if (!isRcSessionValid()) {
+                    const backendOk = await verifyBackendWithPuzzle(
+                        API_BASE_URL, RC_APPLICATION_ID, RC_API_KEY, RC_SERVER_KEY,
                     );
+                    if (!backendOk) {
+                        throw new Error(
+                            "No se pudo verificar la autenticidad del servidor. Conexión rechazada.",
+                        );
+                    }
+                    markRcSessionValid();
                 }
             }
 
