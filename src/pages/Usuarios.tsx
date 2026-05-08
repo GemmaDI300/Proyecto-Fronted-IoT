@@ -1,10 +1,17 @@
+import { useMemo } from "react";
 import { GridColDef } from "@mui/x-data-grid";
 import Gestion from "../components/Gestion";
+import { FieldConfig } from "../components/EditarDialog";
 import { useGetQuery } from "../shared/api/functions";
 import { useAuth } from "../shared/auth/authContext";
 import { generatePersonalDataSchema } from "../shared/api/schemas/validation";
 import { PageResponse, PersonalDataResponse } from "../shared/api/types";
 import { CircularProgress, Alert, Box } from "@mui/material";
+
+const STATUS_OPTIONS: { label: string; value: boolean }[] = [
+    { label: "Activo", value: true },
+    { label: "Inactivo", value: false },
+];
 
 const editSchema = generatePersonalDataSchema(false);
 const newSchema = generatePersonalDataSchema(true);
@@ -51,7 +58,16 @@ export default function Usuarios() {
     if (isLoading) return <CircularProgress />;
     if (isError) return <Alert severity="error">{error.message}</Alert>;
 
-    const canModify = session?.accountType === "administrator";
+    // Per OSO policy: admin can CRUD, manager can read+write (not delete)
+    const canModifyAdmin = session?.accountType === "administrator";
+    const canModifyManager = session?.accountType === "manager";
+
+    const fieldsConfig = useMemo<Partial<Record<string, FieldConfig>>>(
+        () => ({
+            is_active: { type: "boolean", options: STATUS_OPTIONS },
+        }),
+        []
+    );
 
     return (
         <Gestion<PersonalDataResponse>
@@ -62,10 +78,13 @@ export default function Usuarios() {
             editValidationSchema={editSchema}
             newValidationSchema={newSchema}
             keyEndpoint="users"
-            canCreate={canModify}
-            canEdit={canModify}
-            canDelete={canModify}
+            canCreate={canModifyAdmin || canModifyManager}
+            canEdit={canModifyAdmin || canModifyManager}
+            canDelete={canModifyAdmin}
             getEntityName={(row) => `${row.first_name} ${row.last_name}`}
+            entityTypeLabel="Usuario"
+            showDetail={true}
+            fieldsConfig={fieldsConfig}
         />
     );
 }

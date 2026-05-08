@@ -143,17 +143,19 @@ const LoginUsuarioServices = () => {
                 </Box>
 
                 <Grid container spacing={3} justifyContent="center">
-                    {services.map((svc) => (
+                    {services.map((svc, idx) => (
                         <Grid item xs={12} sm={6} key={svc.id}>
                             <Card
                                 elevation={0}
                                 sx={{
                                     border: "1px solid #e2e8f0",
                                     borderRadius: 3,
-                                    transition: "all 0.25s ease",
+                                    transition: "box-shadow 0.25s ease, border-color 0.25s ease",
+                                    cursor: "pointer",
+                                    animation: "fadeSlideUp 0.4s ease both",
+                                    animationDelay: `${idx * 0.1}s`,
                                     "&:hover": {
-                                        transform: "translateY(-4px)",
-                                        boxShadow: `0 12px 32px ${PRIMARY}22`,
+                                        boxShadow: `0 8px 28px ${PRIMARY}28`,
                                         borderColor: PRIMARY,
                                     },
                                 }}

@@ -1,10 +1,17 @@
+import { useMemo } from "react";
 import { GridColDef } from "@mui/x-data-grid";
 import Gestion from "../components/Gestion";
+import { FieldConfig } from "../components/EditarDialog";
 import { useGetQuery } from "../shared/api/functions";
 import { useAuth } from "../shared/auth/authContext";
 import { generateDeviceSchema } from "../shared/api/schemas/validation";
 import { PageResponse, DeviceResponse } from "../shared/api/types";
 import { CircularProgress, Alert, Box } from "@mui/material";
+
+const STATUS_OPTIONS: { label: string; value: boolean }[] = [
+    { label: "Activo", value: true },
+    { label: "Inactivo", value: false },
+];
 
 
 const editSchema = generateDeviceSchema(false);
@@ -55,7 +62,14 @@ export default function Dispositivos() {
     if (isLoading) return <CircularProgress />;
     if (isError) return <Alert severity="error">{error.message}</Alert>;
 
-    const canModify = session?.accountType === "administrator";
+    const canModify = session?.accountType === "administrator" || session?.accountType === "manager";
+
+    const fieldsConfig = useMemo<Partial<Record<string, FieldConfig>>>(
+        () => ({
+            is_active: { type: "boolean", options: STATUS_OPTIONS },
+        }),
+        []
+    );
 
     return (
         <Gestion<DeviceResponse>
@@ -70,6 +84,9 @@ export default function Dispositivos() {
             canEdit={canModify}
             canDelete={canModify}
             getEntityName={(row) => row.name}
+            showDetail={true}
+            entityTypeLabel="Dispositivo"
+            fieldsConfig={fieldsConfig}
         />
     );
 }

@@ -26,7 +26,7 @@ export interface PersonalDataCreate {
     postal_code: string;
     birth_date: string;
     email: string;
-    password_hash: string;
+    password: string;
     curp: string;
     rfc: string;
 }
@@ -42,7 +42,7 @@ export interface PersonalDataUpdate {
     postal_code?: string;
     birth_date?: string;
     email?: string;
-    password_hash?: string;
+    password?: string;
     curp?: string;
     rfc?: string;
     is_active?: boolean;
@@ -99,6 +99,173 @@ export interface PageResponse<T> {
     offset: number;
     limit: number;
     data: T[];
+}
+
+// --- Service ---
+export interface ServiceCreate {
+    name: string;
+    description?: string;
+    administrator_id: string;
+}
+
+export interface ServiceUpdate {
+    name?: string;
+    description?: string;
+    is_active?: boolean;
+}
+
+export interface ServiceResponse {
+    [key: string]: unknown;
+    id: string;
+    name: string;
+    description: string | null;
+    administrator_id: string;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+// --- Application ---
+export interface ApplicationCreate {
+    name: string;
+    version?: string;
+    url?: string;
+    port?: number;
+    description?: string;
+    administrator_id: string;
+}
+
+export interface ApplicationUpdate {
+    name?: string;
+    version?: string;
+    url?: string;
+    port?: number;
+    description?: string;
+    is_active?: boolean;
+}
+
+export interface ApplicationResponse {
+    [key: string]: unknown;
+    id: string;
+    name: string;
+    version: string | null;
+    url: string | null;
+    port: number | null;
+    description: string | null;
+    administrator_id: string;
+    api_key: string;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+// --- Role ---
+export interface RoleCreate {
+    name: string;
+    description?: string;
+    service_id: string;
+    is_active?: boolean;
+}
+
+export interface RoleUpdate {
+    name?: string;
+    description?: string;
+    is_active?: boolean;
+}
+
+export interface RoleResponse {
+    [key: string]: unknown;
+    id: string;
+    name: string;
+    description: string | null;
+    service_id: string;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+// --- Tickets ---
+export type TicketPriority = "low" | "medium" | "high" | "critical";
+
+export interface ServiceTicketCreate {
+    title: string;
+    description?: string;
+    user_role_id: string;
+    status_id: number;
+    service_id: string;
+    priority?: TicketPriority;
+}
+
+export interface ServiceTicketUpdate {
+    title?: string;
+    description?: string;
+    status_id?: number;
+    priority?: TicketPriority;
+}
+
+export interface ServiceTicketResponse {
+    [key: string]: unknown;
+    id: string;
+    title: string;
+    description: string | null;
+    user_role_id: string;
+    status_id: number;
+    service_id: string;
+    priority: TicketPriority;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface EcosystemTicketCreate {
+    title: string;
+    description?: string;
+    manager_service_id: string;
+    status_id: number;
+    priority?: TicketPriority;
+}
+
+export interface EcosystemTicketUpdate {
+    title?: string;
+    description?: string;
+    status_id?: number;
+    priority?: TicketPriority;
+}
+
+export interface EcosystemTicketResponse {
+    [key: string]: unknown;
+    id: string;
+    title: string;
+    description: string | null;
+    manager_service_id: string;
+    status_id: number;
+    priority: TicketPriority;
+    created_at: string;
+    updated_at: string;
+}
+
+// --- Vinculaciones (link join-table responses) ---
+export interface ManagerServiceResponse {
+    id: string;
+    manager_id: string;
+    service_id: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface DeviceServiceResponse {
+    id: string;
+    device_id: string;
+    service_id: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface UserRoleResponse {
+    id: string;
+    user_id: string;
+    role_id: string;
+    created_at: string;
+    updated_at: string;
 }
 
 // Tipo genérico con id opcional — compatible con index signature de DataGrid

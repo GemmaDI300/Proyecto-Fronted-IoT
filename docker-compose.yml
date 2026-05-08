@@ -5,7 +5,16 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        VITE_API_BASE_URL: http://localhost:8000/api/v1/
+        # URL relativa: nginx proxea /api/ al backend en el host via extra_hosts.
+        # Evita mixed-content al servir HTTPS en el frontend.
+        VITE_API_BASE_URL: /api/v1/
+        VITE_APP_APPLICATION_ID: ""
+        VITE_APP_API_KEY: ""
+        VITE_APP_SERVER_KEY: ""
     ports:
       - "3000:3000"
+    # Permite que nginx.conf resuelva 'backend' como la IP del host
+    # (necesario para proxy_pass http://backend:8000/api/)
+    extra_hosts:
+      - "backend:host-gateway"
     restart: always

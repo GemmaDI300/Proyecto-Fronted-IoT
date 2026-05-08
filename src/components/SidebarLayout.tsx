@@ -17,13 +17,15 @@ import {
     ListItemButton,
     Chip,
     Avatar,
-    InputBase,
+    Alert,
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import LogoutIcon from "@mui/icons-material/Logout";
-import SearchIcon from "@mui/icons-material/Search";
+import LockResetIcon from "@mui/icons-material/LockReset";
+import CambiarPasswordDialog from "./CambiarPasswordDialog";
 import { useAuth } from "../shared/auth/authContext";
+import { useSetupMode } from "../shared/components/BackendGate";
 
 export interface NavItem {
     text: string;
@@ -64,7 +66,9 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({
     const location = useLocation();
     const isMobile = useMediaQuery(theme.breakpoints.down("md"));
     const [open, setOpen] = React.useState(!isMobile);
+    const [changePwOpen, setChangePwOpen] = React.useState(false);
     const { logout, session } = useAuth();
+    const isSetupMode = useSetupMode();
 
     const handleDrawerToggle = () => setOpen(!open);
 
@@ -77,10 +81,11 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({
 
     const handleLogout = () => {
         logout();
-        navigate("/login");
+        navigate("/login/admin-master");
     };
 
     const visibleItems = navItems.filter((item) => {
+        if (isSetupMode) return item.path === "/aplicaciones";
         if (!item.allowedTypes) return true;
         if (!session) return false;
         if (item.requireMaster && !session.isMaster) return false;
@@ -113,6 +118,7 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({
             <AppBar
                 position="fixed"
                 elevation={0}
+                role="banner"
                 sx={{
                     width: { md: open ? `calc(100% - ${drawerWidth}px)` : "100%" },
                     ml: { md: open ? `${drawerWidth}px` : 0 },
@@ -130,38 +136,33 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({
                     <IconButton
                         edge="start"
                         onClick={handleDrawerToggle}
+                        aria-label={open ? "Cerrar menú de navegación" : "Abrir menú de navegación"}
+                        aria-expanded={open}
                         sx={{ mr: 2, color: "text.secondary" }}
                     >
                         {open ? <ChevronLeftIcon /> : <MenuIcon />}
                     </IconButton>
 
-                    {/* Search bar — wireframe style */}
-                    <Box
-                        sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            bgcolor: "#f1f5f9",
-                            borderRadius: 2,
-                            px: 1.5,
-                            py: 0.5,
-                            flexGrow: 1,
-                            maxWidth: 400,
-                        }}
-                    >
-                        <SearchIcon sx={{ color: "text.secondary", fontSize: 20, mr: 1 }} />
-                        <InputBase placeholder="Buscar..." sx={{ fontSize: 14, flex: 1 }} />
-                    </Box>
-
                     <Box sx={{ flexGrow: 1 }} />
+                    <IconButton
+                        onClick={() => setChangePwOpen(true)}
+                        aria-label="Cambiar contraseña"
+                        title="Cambiar contraseña"
+                        size="small"
+                        sx={{ mr: 1, color: "text.secondary" }}
+                    >
+                        <LockResetIcon fontSize="small" />
+                    </IconButton>
                     {session && (
                         <Chip
                             label={fullRoleLabel}
+                            aria-label={`Rol actual: ${fullRoleLabel}`}
                             color={roleColors[session.accountType] || "default"}
                             size="small"
                             sx={{
                                 fontWeight: 700,
                                 background: session.isMaster
-                                    ? "linear-gradient(135deg, #2563eb, #7c3aed)"
+                                    ? "linear-gradient(135deg, #06b6d4, #0f172a)"
                                     : undefined,
                                 color: "#fff",
                             }}
@@ -169,6 +170,8 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({
                     )}
                 </Toolbar>
             </AppBar>
+
+            <CambiarPasswordDialog open={changePwOpen} onClose={() => setChangePwOpen(false)} />
 
             <Drawer
                 variant={isMobile ? "temporary" : "persistent"}
@@ -193,7 +196,7 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({
                             width: 36,
                             height: 36,
                             borderRadius: 2,
-                            background: "linear-gradient(135deg, #2563eb, #7c3aed)",
+                        background: "linear-gradient(135deg, #06b6d4 0%, #0f172a 100%)",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -216,67 +219,86 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({
 
                 <Divider />
 
+                {/* Banner de modo configuración inicial */}
+                {isSetupMode && (
+                    <Alert severity="warning" sx={{ borderRadius: 0, fontSize: 12, py: 1 }}>
+                        <strong>Modo configuración inicial</strong><br />
+                        Crea una Application para activar el sistema completo.
+                    </Alert>
+                )}
+
                 {/* Nav sections */}
                 <Box sx={{ flex: 1, overflow: "auto", py: 1 }}>
-                    {sections.map((sec) => (
-                        <Box key={sec.title}>
-                            <Typography
-                                variant="overline"
-                                sx={{
-                                    px: 2.5,
-                                    pt: 2,
-                                    pb: 0.5,
-                                    display: "block",
-                                    fontSize: 10,
-                                    fontWeight: 700,
-                                    letterSpacing: 1.2,
-                                    color: "text.secondary",
-                                }}
-                            >
-                                {sec.title}
-                            </Typography>
-                            <List dense disablePadding>
-                                {sec.items.map((item) => (
-                                    <ListItem key={item.text} disablePadding sx={{ px: 1 }}>
-                                        <ListItemButton
-                                            onClick={() => handleNavigation(item.path)}
-                                            selected={isActive(item.path)}
-                                            sx={{
-                                                py: 1,
-                                                px: 1.5,
-                                                borderRadius: 2,
-                                                mb: 0.25,
-                                                "&.Mui-selected": {
-                                                    bgcolor: "#eff6ff",
-                                                    color: "#2563eb",
-                                                    "& .MuiListItemIcon-root": { color: "#2563eb" },
-                                                },
-                                                "&.Mui-selected:hover": {
-                                                    bgcolor: "#dbeafe",
-                                                },
-                                                "&:hover": {
-                                                    bgcolor: "#f8fafc",
-                                                },
-                                            }}
-                                        >
-                                            {item.icon && (
-                                                <ListItemIcon sx={{ minWidth: 36, color: isActive(item.path) ? "#2563eb" : "text.secondary" }}>
-                                                    {item.icon}
-                                                </ListItemIcon>
-                                            )}
-                                            <ListItemText
-                                                primary={item.text}
-                                                primaryTypographyProps={{
-                                                    fontSize: 13.5,
-                                                    fontWeight: isActive(item.path) ? 700 : 500,
-                                                }}
-                                            />
-                                        </ListItemButton>
-                                    </ListItem>
-                                ))}
-                            </List>
-                        </Box>
-                    ))}
+                    <nav aria-label="Menú principal de navegación">
+                        {sections.map((sec) => (
+                            <Box key={sec.title}>
+                                <Typography
+                                    variant="overline"
+                                    component="h2"
+                                    sx={{
+                                        px: 2.5,
+                                        pt: 2,
+                                        pb: 0.5,
+                                        display: "block",
+                                        fontSize: 10,
+                                        fontWeight: 700,
+                                        letterSpacing: 1.2,
+                                        color: "text.secondary",
+                                    }}
+                                >
+                                    {sec.title}
+                                </Typography>
+                                <List dense disablePadding>
+                                    {sec.items.map((item) => {
+                                        const active = isActive(item.path);
+                                        return (
+                                            <ListItem key={item.text} disablePadding sx={{ px: 1 }}>
+                                                <ListItemButton
+                                                    onClick={() => handleNavigation(item.path)}
+                                                    selected={active}
+                                                    aria-label={`Navegar a ${item.text}`}
+                                                    aria-current={active ? "page" : undefined}
+                                                    sx={{
+                                                        py: 1,
+                                                        px: 1.5,
+                                                        borderRadius: 2,
+                                                        mb: 0.25,
+                                                        "&.Mui-selected": {
+                                                            bgcolor: "#ecfeff",
+                                                            color: "#06b6d4",
+                                                            "& .MuiListItemIcon-root": { color: "#06b6d4" },
+                                                        },
+                                                        "&.Mui-selected:hover": {
+                                                            bgcolor: "#cffafe",
+                                                        },
+                                                        "&:hover": {
+                                                            bgcolor: "#f8fafc",
+                                                        },
+                                                    }}
+                                                >
+                                                    {item.icon && (
+                                                        <ListItemIcon 
+                                                            sx={{ minWidth: 36, color: active ? "#06b6d4" : "text.secondary" }}
+                                                            aria-hidden="true"
+                                                        >
+                                                            {item.icon}
+                                                        </ListItemIcon>
+                                                    )}
+                                                    <ListItemText
+                                                        primary={item.text}
+                                                        primaryTypographyProps={{
+                                                            fontSize: 13.5,
+                                                            fontWeight: active ? 700 : 500,
+                                                        }}
+                                                    />
+                                                </ListItemButton>
+                                            </ListItem>
+                                        );
+                                    })}
+                                </List>
+                            </Box>
+                        ))}
+                    </nav>
                 </Box>
 
                 <Divider />
@@ -287,7 +309,7 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({
                         sx={{
                             width: 36,
                             height: 36,
-                            background: "linear-gradient(135deg, #2563eb, #7c3aed)",
+                            background: "linear-gradient(135deg, #06b6d4, #0f172a)",
                             fontSize: 14,
                             fontWeight: 700,
                         }}
@@ -306,7 +328,7 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({
                                 fontSize: 10,
                                 fontWeight: 700,
                                 background: session?.isMaster
-                                    ? "linear-gradient(135deg, #2563eb, #7c3aed)"
+                                    ? "linear-gradient(135deg, #06b6d4, #0f172a)"
                                     : undefined,
                                 color: session?.isMaster ? "white" : undefined,
                             }}
@@ -316,6 +338,8 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({
                     <IconButton
                         size="small"
                         onClick={handleLogout}
+                        aria-label="Cerrar sesión"
+                        title="Cerrar sesión"
                         sx={{
                             color: "text.secondary",
                             "&:hover": { color: "error.main", bgcolor: "#fee2e2" },
@@ -328,6 +352,7 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({
 
             <Box
                 component="main"
+                role="main"
                 sx={{
                     flexGrow: 1,
                     p: 3,
