@@ -1,7 +1,38 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createTheme, ThemeProvider, CssBaseline, CircularProgress, Box } from "@mui/material";
-import { StrictMode, lazy, Suspense } from "react";
+import { createTheme, ThemeProvider, CssBaseline, CircularProgress, Box, Alert, Button } from "@mui/material";
+import { StrictMode, lazy, Suspense, Component, ErrorInfo, ReactNode } from "react";
 import { createRoot } from "react-dom/client";
+
+// ── Error Boundary ────────────────────────────────────────────────────────────
+interface EBState { hasError: boolean; message: string }
+class AppErrorBoundary extends Component<{ children: ReactNode }, EBState> {
+    state: EBState = { hasError: false, message: "" };
+    static getDerivedStateFromError(error: Error): EBState {
+        return { hasError: true, message: error.message };
+    }
+    componentDidCatch(error: Error, info: ErrorInfo) {
+        console.error("[AppErrorBoundary]", error, info.componentStack);
+    }
+    render() {
+        if (this.state.hasError) {
+            return (
+                <Box sx={{ p: 4, maxWidth: 600, mx: "auto", mt: 8 }}>
+                    <Alert
+                        severity="error"
+                        action={
+                            <Button size="small" onClick={() => this.setState({ hasError: false, message: "" })}>
+                                Reintentar
+                            </Button>
+                        }
+                    >
+                        <strong>Error inesperado:</strong> {this.state.message || "Algo salió mal. Recarga la página."}
+                    </Alert>
+                </Box>
+            );
+        }
+        return this.props.children;
+    }
+}
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./shared/auth/authContext";
 import { ActivityProvider } from "./shared/activity/activityContext";
@@ -219,15 +250,17 @@ createRoot(document.getElementById("root")!).render(
         <QueryClientProvider client={queryClient}>
             <ThemeProvider theme={theme}>
                 <CssBaseline />
-                <BackendGate>
-                    <ActivityProvider>
-                        <AuthProvider>
-                            <Router>
-                                <MainApp />
-                            </Router>
-                        </AuthProvider>
-                    </ActivityProvider>
-                </BackendGate>
+                <AppErrorBoundary>
+                    <BackendGate>
+                        <ActivityProvider>
+                            <AuthProvider>
+                                <Router>
+                                    <MainApp />
+                                </Router>
+                            </AuthProvider>
+                        </ActivityProvider>
+                    </BackendGate>
+                </AppErrorBoundary>
             </ThemeProvider>
         </QueryClientProvider>
     </StrictMode>

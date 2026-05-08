@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { GridColDef } from "@mui/x-data-grid";
 import Gestion from "../components/Gestion";
+import LinkPanel from "../components/LinkPanel";
 import { useGetQuery } from "../shared/api/functions";
 import { useAuth } from "../shared/auth/authContext";
 import { generateServiceSchema } from "../shared/api/schemas/validation";
@@ -21,18 +22,9 @@ export default function Servicios() {
     );
 
     const { data: adminsData } = useGetQuery<PageResponse<PersonalDataResponse>>(
-        "administrators/",
+        "administrators/?limit=500",
         session!,
         { enabled: session?.accountType === "administrator" }
-    );
-
-    const adminOptions = useMemo(
-        () =>
-            (adminsData?.data ?? []).map((a) => ({
-                label: `${a.first_name} ${a.last_name}`,
-                value: a.id,
-            })),
-        [adminsData]
     );
 
     const columns: GridColDef[] = [
@@ -81,17 +73,16 @@ export default function Servicios() {
 
     const fieldsConfig = useMemo(
         () => ({
+            // auto-filled from session — hidden so the user cannot change it
             administrator_id: {
-                type: "select" as const,
-                options: adminOptions,
-                helperText: "Selecciona el administrador responsable del servicio",
+                hidden: true,
             },
             is_active: {
                 type: "boolean" as const,
                 options: STATUS_OPTIONS,
             },
         }),
-        [adminOptions]
+        []
     );
 
     if (isLoading) return <CircularProgress />;
@@ -115,6 +106,49 @@ export default function Servicios() {
             entityTypeLabel="Servicio"
             defaultValues={{ administrator_id: session?.accountId } as Partial<ServiceResponse>}
             fieldsConfig={fieldsConfig}
+            renderLinkPanel={(row) => (
+                <>
+                    <LinkPanel
+                        title="Gerentes asignados"
+                        session={session!}
+                        listEndpoint={`services/${row.id}/managers`}
+                        linkedIdField="manager_id"
+                        addMode="path"
+                        addEndpoint={`services/${row.id}/managers`}
+                        removeEndpoint={`services/${row.id}/managers`}
+                        allItemsEndpoint="managers/?limit=100"
+                        getItemLabel={(item) =>
+                            `${item.first_name ?? ""} ${item.last_name ?? ""}`.trim()
+                        }
+                    />
+                    <LinkPanel
+                        title="Dispositivos asignados"
+                        session={session!}
+                        listEndpoint={`services/${row.id}/devices`}
+                        linkedIdField="device_id"
+                        addMode="path"
+                        addEndpoint={`services/${row.id}/devices`}
+                        removeEndpoint={`services/${row.id}/devices`}
+                        allItemsEndpoint="devices/?limit=100"
+                        getItemLabel={(item) =>
+                            `${item.name ?? ""} (${item.serial_number ?? ""})`.trim()
+                        }
+                    />
+                    <LinkPanel
+                        title="Aplicaciones asignadas"
+                        session={session!}
+                        listEndpoint={`services/${row.id}/applications`}
+                        linkedIdField="application_id"
+                        addMode="path"
+                        addEndpoint={`services/${row.id}/applications`}
+                        removeEndpoint={`services/${row.id}/applications`}
+                        allItemsEndpoint="applications/?limit=100"
+                        getItemLabel={(item) =>
+                            `${item.name ?? ""}`.trim()
+                        }
+                    />
+                </>
+            )}
         />
     );
 }

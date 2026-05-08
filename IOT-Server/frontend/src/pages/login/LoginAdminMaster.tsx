@@ -6,8 +6,10 @@ const LoginAdminMaster = () => (
             badge: "Admin Master",
             emailPlaceholder: "admin@iot-platform.local",
             warning:
-                "Política de sesión única: Solo una sesión activa permitida. Si hay sesión activa, recibirás error 409.",
-            apiEndpoint: "auth/login",
+                "Acceso exclusivo para Administradores Master. Política de sesión única: Solo una sesión activa permitida. Si hay sesión activa, recibirás error 409.",
+            apiEndpoint: "auth-rc/master/login",
+            requiredAccountType: "administrator",
+            requiredIsMaster: true,
             primary: "#2563eb",
             primaryDark: "#1d4ed8",
             primaryLight: "#dbeafe",
@@ -18,3 +20,4 @@ const LoginAdminMaster = () => (
 );
 
 export default LoginAdminMaster;
+

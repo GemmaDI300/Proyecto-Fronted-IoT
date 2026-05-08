@@ -18,6 +18,7 @@ interface ConfirmDeleteDialogProps {
     onConfirm: (reason: string) => void;
     entityName: string;
     isPending?: boolean;
+    serverError?: string | null;
 }
 
 export default function ConfirmDeleteDialog({
@@ -26,6 +27,7 @@ export default function ConfirmDeleteDialog({
     onConfirm,
     entityName,
     isPending = false,
+    serverError = null,
 }: ConfirmDeleteDialogProps) {
     const [reason, setReason] = useState("");
     const [error, setError] = useState(false);
@@ -71,6 +73,11 @@ export default function ConfirmDeleteDialog({
                 >
                     Esta acción no se puede deshacer.
                 </Alert>
+                {serverError && (
+                    <Alert severity="error" sx={{ mb: 2 }} role="alert" aria-live="assertive">
+                        {serverError}
+                    </Alert>
+                )}
                 <Typography 
                     variant="body2" 
                     sx={{ mb: 2 }}

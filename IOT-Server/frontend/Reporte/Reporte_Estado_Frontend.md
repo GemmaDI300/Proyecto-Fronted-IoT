@@ -1878,3 +1878,1071 @@ docker compose up -d frontend   # Contenedor iot-frontend Started
 **Comportamiento del frontend tras Fase 2:**
 `BackendGate` ejecuta el puzzle AES-256-CBC + HMAC-SHA256 contra `POST /api/v1/applications/auth`.
 Si el backend devuelve `{ valid: true }`, el sistema entra en modo normal con todos los modulos disponibles.
+
+---
+
+## 20. Actualización — Mejoras en Aplicaciones: logs, credenciales automáticas y botones de flujo (8 de mayo de 2026)
+
+**Motivo:** Tres mejoras de usabilidad para simplificar el proceso de configuración inicial y la operación cotidiana, concentradas en la página de Aplicaciones y el componente `Gestion`.
+
+---
+
+### 20.1 Resumen de cambios
+
+| # | Cambio | Archivos afectados |
+|---|---|---|
+| 1 | Logs de actividad se borran al hacer una desinstalación total | `Aplicaciones.tsx` |
+| 2 | Credenciales RC aparecen automáticamente al crear una Application, sin recargar la página ni volver a hacer login | `Aplicaciones.tsx`, `Gestion.tsx` |
+| 3 | Botón "Insertar en docker-compose.yml" + confirmación de estado | `Aplicaciones.tsx` |
+| 4 | Botón "Reconstruir frontend" con copia de comandos al portapapeles | `Aplicaciones.tsx` |
+
+---
+
+### 20.2 Problema 1 — Logs no se borraban en desinstalación total
+
+**Situación anterior:** El proceso de desinstalación total (`docker compose down -v --remove-orphans`) destruye los datos del servidor (SQLite + Valkey), pero los logs de actividad del panel (almacenados en `localStorage` del navegador bajo la clave `iot_activity_log`) persistían. Después de reinstalar, el Dashboard seguía mostrando acciones de la instalación anterior.
+
+**Solución:** Se añadió una **"Zona de desinstalación total"** al final de la página de Aplicaciones, **visible únicamente para el Admin Master**. Contiene:
+
+- El comando `docker compose down -v --remove-orphans` en un bloque de código copiable.
+- Un botón **"Limpiar logs de actividad local"** que invoca `clearEvents()` del `ActivityContext`, eliminando el `localStorage` y reseteando el estado del feed del Dashboard.
+- Confirmación visual verde ("¡Logs eliminados!") que desaparece a los 4 segundos.
+- Nota explicativa que aclara que solo afecta al historial local del navegador, no a la base de datos del servidor.
+
+---
+
+### 20.3 Problema 2 — Credenciales RC no aparecían hasta refrescar la página
+
+**Situación anterior:** Al crear una `Application` en modo configuración inicial, el panel amarillo con las credenciales (`SetupCredentialsPanel`) no aparecía hasta recargar la página y volver a iniciar sesión. Esto ocurría porque `Aplicaciones.tsx` dependía únicamente de la consulta React Query (`useGetQuery`), la cual no se invalidaba automáticamente tras la creación.
+
+**Solución técnica:**
+
+**En `Gestion.tsx`:**
+- Se añadió la prop opcional `onCreateSuccess?: (row: T) => void` a `GestionProps<T>`.
+- La callback interna `handleCreateSuccess` invoca `onCreateSuccess?.(newRow)` inmediatamente después de actualizar `tableRows`.
+
+**En `Aplicaciones.tsx`:**
+- Se añadió el estado local `newlyCreatedApps: ApplicationResponse[]`.
+- Se pasa `onCreateSuccess={handleCreateSuccess}` al componente `<Gestion>`, donde `handleCreateSuccess` agrega la nueva `ApplicationResponse` (que incluye el `api_key` completo) a `newlyCreatedApps`.
+- La variable `apps` de renderizado combina los datos de la consulta con los locales:
+
+```typescript
+const apps = [
+    ...queryApps,
+    ...newlyCreatedApps.filter((n) => !queryApps.some((a) => a.id === n.id)),
+];
+```
+
+Resultado: `SetupCredentialsPanel` recibe la app recién creada en el mismo ciclo de render, sin ninguna recarga ni re-login.
+
+---
+
+### 20.4 Nuevos botones en `SetupCredentialsPanel`
+
+#### Botón 1 — "Insertar en docker-compose.yml"
+
+| Aspecto | Detalle |
+|---|---|
+| Visibilidad | Solo en setup mode con al menos una Application creada |
+| Acción | Copia al portapapeles el bloque YAML completo de los cuatro `args` del servicio `frontend` |
+| Contenido copiado | `VITE_API_BASE_URL`, `VITE_APP_APPLICATION_ID` (con valor real), `VITE_APP_API_KEY` (con valor real), `VITE_APP_SERVER_KEY` (placeholder con instrucción de reemplazo) |
+| Estado "copiado" | Botón cambia a verde con ícono `CheckCircleOutline` durante 4 segundos |
+| Alerta de seguimiento | `Alert severity="success"` que indica exactamente en qué sección de `docker-compose.yml` pegar el bloque y que `VITE_APP_SERVER_KEY` debe reemplazarse con el resultado del comando de terminal |
+
+**Formato del bloque YAML copiado:**
+
+```yaml
+        VITE_API_BASE_URL: /api/v1/
+        VITE_APP_APPLICATION_ID: "<id de la Application>"
+        VITE_APP_API_KEY: "<api_key de la Application>"
+        VITE_APP_SERVER_KEY: "← REEMPLAZAR con el resultado del comando de abajo"
+```
+
+#### Botón 2 — "Reconstruir frontend"
+
+| Aspecto | Detalle |
+|---|---|
+| Visibilidad | Siempre visible en el panel de credenciales |
+| Acción | Copia al portapapeles los dos comandos de reconstrucción |
+| Contenido copiado | `docker compose build frontend\ndocker compose up -d` |
+| Estado "copiado" | Botón cambia a verde con ícono `CheckCircleOutline` durante 4 segundos |
+| Alerta de seguimiento | `Alert severity="info"` que muestra los dos comandos inline con instrucción de ejecutarlos desde `IOT-Server/` |
+
+---
+
+### 20.5 Archivos modificados
+
+#### `src/components/Gestion.tsx`
+
+| Cambio | Detalle |
+|---|---|
+| Nueva prop en `GestionProps<T>` | `onCreateSuccess?: (row: T) => void` |
+| Nueva prop en destructuring | `onCreateSuccess` con valor por defecto `undefined` |
+| Invocación en `handleCreateSuccess` | `onCreateSuccess?.(newRow)` al final de la función |
+
+#### `src/pages/Aplicaciones.tsx`
+
+| Cambio | Detalle |
+|---|---|
+| Imports nuevos | `useCallback`, `Button`, `CheckCircleOutlineIcon`, `BuildIcon`, `DeleteForeverIcon`, `LayersClearIcon`, `useActivity` |
+| Estado `newlyCreatedApps` | `useState<ApplicationResponse[]>([])` — apps creadas en la sesión actual |
+| Estado `logsClearedMsg` | `useState<boolean>(false)` — controla la confirmación del botón de logs |
+| `handleCreateSuccess` | `useCallback` que agrega la nueva app a `newlyCreatedApps` |
+| `handleClearLogs` | Invoca `clearEvents()` y activa `logsClearedMsg` por 4 segundos |
+| Variable `apps` | Combina `queryApps` + `newlyCreatedApps` deduplicados por `id` |
+| Variable `isMaster` | Nueva derivada de `session` para condicionar la zona de desinstalación |
+| `SetupCredentialsPanel` | Refactorizado: ahora acepta los botones de copia de config y rebuild con estado propio |
+| Zona de desinstalación | Card roja con el comando `docker compose down -v`, botón de limpiar logs y confirmación |
+
+---
+
+### 20.6 Estado de funcionalidades tras esta actualización
+
+| Funcionalidad | Estado |
+|---|---|
+| Credenciales RC aparecen sin recargar la página | ✅ Inmediato tras crear la Application |
+| Botón "Insertar en docker-compose.yml" con estado de confirmación | ✅ Copia bloque YAML + alerta verde |
+| Botón "Reconstruir frontend" con copia de comandos | ✅ Copia comandos docker + alerta azul |
+| Logs de actividad local limpiables desde la UI | ✅ Botón en zona de desinstalación (solo Admin Master) |
+| Zona de desinstalación visible solo para Admin Master | ✅ Condicionado por `isMaster` |
+
+---
+
+## 21. Actualización — Restricción de acceso por tipo de cuenta en pantallas de login (8 de mayo de 2026)
+
+**Motivo:** Las cinco pantallas de login usaban el mismo endpoint `POST /api/v1/auth/login` sin ninguna verificación del tipo de cuenta retornado. Cualquier usuario podía introducir sus credenciales en cualquier pantalla y obtener una sesión válida aunque el rol no correspondiera a esa entrada. Se implementó validación post-respuesta que rechaza la sesión antes de establecerla si el `account_type` o `is_master` devueltos por el servidor no coinciden con los requeridos por la pantalla.
+
+---
+
+### 21.1 Problema anterior
+
+| Pantalla | Endpoint llamado | Verificación de tipo | Resultado incorrecto |
+|---|---|---|---|
+| Admin Master | `auth/login` | ❌ Ninguna | Un gerente o usuario podía iniciar sesión aquí |
+| Admin Normal | `auth/login` | ❌ Ninguna | Un admin master o usuario podía iniciar sesión aquí |
+| Gerente | `auth/login` | ❌ Ninguna | Un administrador o usuario podía iniciar sesión aquí |
+| Usuario (Control Industrial) | `auth/login` | ❌ Ninguna | Un administrador o gerente podía iniciar sesión aquí |
+| Usuario (Monitoreo Ambiental) | `auth/login` | ❌ Ninguna | Un administrador o gerente podía iniciar sesión aquí |
+
+---
+
+### 21.2 Descubrimiento tras actualizar el repositorio upstream
+
+**El backend SÍ tiene endpoints separados por tipo de entidad.** Fueron añadidos en el upstream (`github.com/Coquita01/IOT-Server`) durante commits posteriores al estado local. Tras ejecutar `git fetch upstream` y `git merge upstream/main`, el backend se actualizó e incluye los siguientes endpoints en `app/shared/auth/controller.py`:
+
+| Endpoint | Tipo de entidad | `expected_is_master` |
+|---|---|---|
+| `POST /api/v1/auth-rc/master/login` | `administrator` | `True` (solo Admin Master) |
+| `POST /api/v1/auth-rc/admin/login` | `administrator` | `False` (solo Admin Normal) |
+| `POST /api/v1/auth-rc/manager/login` | `manager` | — |
+| `POST /api/v1/auth-rc/user/login` | `user` | — |
+| `POST /api/v1/auth-rc/devices/login` | `device` | — |
+| `POST /api/v1/auth-rc/applications/login` | `application` | — |
+
+El endpoint antiguo `POST /api/v1/auth/login` fue **eliminado** del backend.
+
+**Cómo funciona el enforcement en el backend:**  
+`login_human_rc` llama a `repository.get_human_by_email(email, entity_type)` — busca la cuenta por email **y** por tipo de entidad en la tabla correspondiente. Si el email pertenece a un usuario pero se llama al endpoint `/auth-rc/manager/login`, la búsqueda devuelve `None` y el backend responde `"Invalid credentials"`. La restricción existe en la base de datos, no solo en la lógica de la aplicación.
+
+---
+
+### 21.3 Estrategia de seguridad (doble capa)
+
+La restricción opera en **dos capas independientes**:
+
+| Capa | Dónde | Qué hace |
+|---|---|---|
+| **Capa 1 — Backend** | `app/shared/auth/service.py → login_human_rc` | Busca por email + entity_type. Si no coincide → `"Invalid credentials"` |
+| **Capa 2 — Frontend** | `authContext.tsx → mutationFn` | Valida `account_type` e `is_master` en la respuesta antes de establecer sesión |
+
+La capa 2 es defensa en profundidad: aunque el backend ya rechaza el tipo incorrecto, el frontend también verifica que la sesión resultante sea del tipo esperado antes de crearla.
+
+---
+
+### 21.4 Cambios en el frontend
+
+#### `authContext.tsx`
+
+```typescript
+// login() — nuevos parámetros opcionales:
+login(email, password, endpoint?, requiredAccountType?, requiredIsMaster?)
+
+// mutationFn — validación post-respuesta antes de retornar tokenData:
+if (credentials.requiredAccountType && tokenData.account_type !== credentials.requiredAccountType) {
+    throw new Error("Las credenciales no corresponden a este tipo de acceso.");
+}
+if (credentials.requiredIsMaster !== undefined && Boolean(tokenData.is_master) !== credentials.requiredIsMaster) {
+    throw new Error("Las credenciales no corresponden a este tipo de acceso.");
+}
+```
+
+#### `LoginBase.tsx`
+
+```typescript
+// LoginConfig — nuevas props:
+requiredAccountType: string;
+requiredIsMaster?: boolean;
+
+// handleLogin pasa las props a login():
+login(email.trim(), password, config.apiEndpoint, config.requiredAccountType, config.requiredIsMaster);
+```
+
+#### Configuración final de las 5 pantallas de login
+
+| Pantalla | `apiEndpoint` | `requiredAccountType` | `requiredIsMaster` |
+|---|---|---|---|
+| `LoginAdminMaster` | `auth-rc/master/login` | `"administrator"` | `true` |
+| `LoginAdminNormal` | `auth-rc/admin/login` | `"administrator"` | `false` |
+| `LoginGerente` | `auth-rc/manager/login` | `"manager"` | — |
+| `LoginUsuarioControlIndustrial` | `auth-rc/user/login` | `"user"` | — |
+| `LoginUsuarioMonitoreoAmbiental` | `auth-rc/user/login` | `"user"` | — |
+
+---
+
+### 21.5 Archivos modificados
+
+| Archivo | Cambio |
+|---|---|
+| `src/shared/auth/authContext.tsx` | `login()` con `requiredAccountType` / `requiredIsMaster`; validación post-respuesta |
+| `src/components/LoginBase.tsx` | `LoginConfig` con `requiredAccountType` / `requiredIsMaster`; `handleLogin` los pasa a `login()` |
+| `src/pages/login/LoginAdminMaster.tsx` | `apiEndpoint: "auth-rc/master/login"`; restricción de tipo y master |
+| `src/pages/login/LoginAdminNormal.tsx` | `apiEndpoint: "auth-rc/admin/login"`; restricción de tipo, no master |
+| `src/pages/login/LoginGerente.tsx` | `apiEndpoint: "auth-rc/manager/login"`; restricción de tipo manager |
+| `src/pages/login/LoginUsuarioControlIndustrial.tsx` | `apiEndpoint: "auth-rc/user/login"`; restricción de tipo user |
+| `src/pages/login/LoginUsuarioMonitoreoAmbiental.tsx` | `apiEndpoint: "auth-rc/user/login"`; restricción de tipo user |
+
+**Backend (upstream merge):**
+- `app/domain/auth/` eliminado (controller, schemas, service, security)
+- `app/shared/auth/` creado (controller, service, schemas, security, auth_policy, repository)
+- `app/main.py` actualizado: registra `change_password_logout_router`, `auth_rc_router`, `auth_xmss_router`
+
+
+---
+
+### 21.6 Estado de funcionalidades tras esta actualización
+
+| Funcionalidad | Estado |
+|---|---|
+| Admin Master solo puede loguear en pantalla de Admin Master | ✅ Backend: endpoint `/auth-rc/master/login` filtra por entity_type + is_master |
+| Admin Normal no puede loguear en pantalla de Admin Master | ✅ Backend: `/auth-rc/master/login` verifica `expected_is_master=True` |
+| Gerente no puede loguear en pantalla de Admin | ✅ Backend: `/auth-rc/admin/login` filtra por entity_type `administrator` |
+| Usuario no puede loguear en pantalla de Gerente | ✅ Backend: `/auth-rc/manager/login` filtra por entity_type `manager` |
+| Administrador no puede loguear en pantalla de Usuario | ✅ Backend: `/auth-rc/user/login` filtra por entity_type `user` |
+| Validación frontend adicional (defensa en profundidad) | ✅ `authContext` verifica `account_type` e `is_master` antes de crear sesión |
+| Mensaje de error genérico (anti-enumeración de roles) | ✅ Siempre: "Las credenciales no corresponden a este tipo de acceso." |
+| Sesión nunca establecida para tipo de cuenta incorrecto | ✅ `setSession()` no se llama si la validación frontend falla |
+
+---
+
+## 22. Actualización — Sincronización con upstream y corrección de endpoints de login (8 de mayo de 2026)
+
+**Motivo:** El repositorio local tenía el backend desactualizado respecto al original (`github.com/Coquita01/IOT-Server`). Al momento de implementar la restricción de login por tipo de cuenta (sección 21) se asumió que el backend solo tenía un endpoint genérico `POST /auth/login`. Tras actualizar desde el upstream se confirmó que el backend **sí tiene endpoints separados por tipo de entidad**, añadidos en commits posteriores al estado local.
+
+**Restricción:** No se realizaron ni se realizarán cambios en el backend. El trabajo se limitó a sincronizar el estado del repositorio con el upstream original y ajustar el frontend para usar los endpoints correctos.
+
+---
+
+### 22.1 Estado del repositorio antes de la actualización
+
+- Remote `origin` → `https://github.com/GemmaDI300/IOT-Server.git` (fork local)
+- Remote `upstream` → `https://github.com/Coquita01/IOT-Server.git` (ya configurado)
+- Commits locales detrás del upstream: **más de 20 commits**, incluyendo PR #36, #38, #40, #41, #42, #43, #44, #45 ya mergeados en upstream
+
+---
+
+### 22.2 Commits integrados desde upstream
+
+Principales cambios incluidos en el merge `git fetch upstream && git merge upstream/main`:
+
+| PR / Commit | Descripción |
+|---|---|
+| `feat: add audit logging with Loguru + AuditLog table` | Nuevo sistema de logs de auditoría |
+| `feat: add CORS middleware configuration` | Configuración CORS en `main.py` |
+| `feat: implement granular RBAC with instance-level filtering via SQL views` | RBAC por instancia con vistas SQL |
+| `feat: add payment entity and validation tests` | Nueva entidad `payment` |
+| `feat: implement granular RBAC with instance-level filtering via SQL views` | Autorización Oso Polar mejorada |
+| `Se agregó la funcionalidad de vincular roles a usuario` + rate limiting | Asignación de roles a usuarios + límite de peticiones |
+| Eliminación de `app/domain/auth/` | Los archivos `controller.py`, `schemas.py`, `service.py`, `security.py` del dominio `auth` fueron eliminados |
+| Creación de `app/shared/auth/` | Nuevo módulo compartido con `controller.py`, `service.py`, `schemas.py`, `security.py`, `auth_policy.py`, `repository.py` |
+
+**Archivos de backend afectados (solo seguimiento):** `app/main.py`, `app/database/model.py`, `app/shared/auth/*`, `app/domain/user/*`, `app/domain/role/*`, `app/domain/manager/*`, `app/domain/payment/*`, `app/shared/authorization/*`, etc.
+
+---
+
+### 22.3 Endpoints de login descubiertos en el upstream
+
+El nuevo módulo `app/shared/auth/controller.py` define routers con prefijo `/auth-rc` (autenticación RC) y `/auth-xmss` (autenticación XMSS post-cuántica), registrados en `main.py` bajo `/api/v1`:
+
+**Auth RC — Entidades humanas:**
+
+| Endpoint | Tipo de entidad | `expected_is_master` |
+|---|---|---|
+| `POST /api/v1/auth-rc/master/login` | `administrator` | `True` |
+| `POST /api/v1/auth-rc/admin/login` | `administrator` | `False` |
+| `POST /api/v1/auth-rc/manager/login` | `manager` | — |
+| `POST /api/v1/auth-rc/user/login` | `user` | — |
+
+**Auth RC — Entidades no humanas:**
+
+| Endpoint | Tipo de entidad |
+|---|---|
+| `POST /api/v1/auth-rc/devices/login` | `device` |
+| `POST /api/v1/auth-rc/applications/login` | `application` |
+
+**Auth compartido (sin cambios de tipo):**
+
+| Endpoint | Descripción |
+|---|---|
+| `PATCH /api/v1/auth/change-password` | Cambiar contraseña (requiere sesión) |
+| `POST /api/v1/auth/logout` | Cerrar sesión / invalidar token |
+
+El endpoint anterior `POST /api/v1/auth/login` fue **eliminado** del backend y no existe en la versión actualizada.
+
+---
+
+### 22.4 Cómo funciona el enforcement en el backend
+
+`login_human_rc` en `app/shared/auth/service.py` llama a:
+
+```python
+resolved = self.repository.get_human_by_email(
+    email=payload.email,
+    entity_type=payload.entity_type,  # filtra por tipo en la tabla correspondiente
+)
+if resolved is None:
+    raise BadRequestException("Invalid credentials")
+```
+
+Si el email pertenece a un `user` pero se llama a `/auth-rc/manager/login` (donde `entity_type = "manager"`), la búsqueda retorna `None` y el backend responde con `400 "Invalid credentials"`. La restricción existe a nivel de base de datos.
+
+Para Admin Master vs Admin Normal, el backend adicionalmente llama a `_validate_expected_admin_scope` con `expected_is_master=True` o `False` según el endpoint.
+
+---
+
+### 22.5 Ajustes en el frontend (únicos cambios realizados)
+
+Solo se modificaron los valores de `apiEndpoint` en las 5 páginas de login para apuntar al endpoint correcto por tipo de entidad:
+
+| Archivo | `apiEndpoint` antes | `apiEndpoint` después |
+|---|---|---|
+| `LoginAdminMaster.tsx` | `"auth/login"` | `"auth-rc/master/login"` |
+| `LoginAdminNormal.tsx` | `"auth/login"` | `"auth-rc/admin/login"` |
+| `LoginGerente.tsx` | `"auth/login"` | `"auth-rc/manager/login"` |
+| `LoginUsuarioControlIndustrial.tsx` | `"auth/login"` | `"auth-rc/user/login"` |
+| `LoginUsuarioMonitoreoAmbiental.tsx` | `"auth/login"` | `"auth-rc/user/login"` |
+
+La validación adicional de `requiredAccountType` / `requiredIsMaster` en `authContext.tsx` y `LoginBase.tsx` (implementada en la sección 21) se mantiene como **defensa en profundidad** del lado del cliente, independientemente del enforcement del backend.
+
+---
+
+### 22.6 Estado final de la restricción de login
+
+| Escenario | Capa que rechaza | Resultado |
+|---|---|---|
+| Gerente intenta loguear en pantalla de Admin Master | **Backend** — `/auth-rc/master/login` no encuentra cuenta con entity_type `administrator` para ese email | `400 Invalid credentials` |
+| Admin Normal intenta loguear en pantalla de Admin Master | **Backend** — `_validate_expected_admin_scope(expected_is_master=True)` falla | `400` o error de scope |
+| Cualquier tipo incorrecto (respuesta inesperada) | **Frontend** — `authContext` verifica `account_type` antes de crear sesión | Sesión rechazada, error mostrado en UI |
+
+---
+
+## 23. Actualización — Habilitación de HTTPS con certificado autofirmado (8 de mayo de 2026)
+
+**Motivo:** Las credenciales de login (email y contraseña) viajaban en texto plano. Al inspeccionar las peticiones en DevTools → Network o con una herramienta de captura de tráfico (Wireshark, mitmproxy), el body de los requests `POST /api/v1/auth-rc/*/login` era completamente legible. Nginx servía en HTTP puro (`listen 3000`) sin ningún cifrado de transporte.
+
+Se analizaron los módulos criptográficos del backend antes de implementar esta solución:
+
+---
+
+### 23.1 Análisis previo del backend
+
+| Módulo | Descripción | ¿Resuelve el problema de texto plano? |
+|---|---|---|
+| `app/shared/middleware/cryptography.py` — `DecryptionMiddleware` | Cifra/descifra cuerpos con AES-256-CBC. El body debe llegar como `{"pl": "iv:ciphertext"}` | ❌ No registrado en `main.py`. Excluye rutas `/login/`. Clave hardcodeada (`"me_tienes_que_cambiar_2026"`) expuesta en el JS del frontend |
+| `app/shared/middleware/auth/auth_manager/manager.py` — `AuthManager` | Genera `key_session` por sesión (32 bytes aleatorios) y la devuelve al cliente | ❌ Solo para devices/applications. No conectado a los endpoints humanos |
+| `app/shared/middleware/auth/auth_rc/puzzle.py` — `PuzzleVerifier` | Verifica reto criptográfico AES-256-CBC + HMAC-SHA256 | ❌ Solo verifica autenticidad del cliente, no cifra credenciales de login |
+| HTTPS/TLS | Cifrado de transporte a nivel de red | ✅ Única solución que protege realmente las credenciales en tránsito |
+
+**Conclusión:** Activar `DecryptionMiddleware` requeriría cambios en el backend (`main.py`) y la clave de cifrado estaría embebida en el bundle JS (visible en DevTools → Sources), lo que no aporta seguridad real. La solución correcta es TLS.
+
+---
+
+### 23.2 Solución implementada: HTTPS con certificado autofirmado
+
+El certificado se genera en **tiempo de build del contenedor Docker**, sin requerir archivos externos ni secrets adicionales. Para un entorno de desarrollo/lab esto es suficiente; en producción se reemplazaría por un certificado de una CA reconocida (Let's Encrypt, etc.).
+
+**Algoritmo del certificado:**
+- RSA 2048 bits
+- SHA-256
+- Validez: 825 días (límite de Chrome para self-signed)
+- `subjectAltName`: `DNS:localhost, IP:127.0.0.1` — requerido por Chrome y Firefox para no mostrar error de nombre
+
+---
+
+### 23.3 Archivos modificados
+
+#### `frontend/Dockerfile` y `frontend/Dockerfile.test`
+
+Se añade una etapa de generación de certificado en la segunda fase (imagen nginx):
+
+```dockerfile
+FROM nginx:1.25-alpine
+# Generar certificado autofirmado para desarrollo (TLS en localhost)
+RUN apk add --no-cache openssl \
+    && mkdir -p /etc/nginx/certs \
+    && openssl req -x509 -nodes -days 825 -newkey rsa:2048 \
+           -keyout /etc/nginx/certs/server.key \
+           -out    /etc/nginx/certs/server.crt \
+           -subj "/C=MX/ST=Dev/L=Dev/O=IoT-Dev/CN=localhost" \
+           -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
+    && chmod 600 /etc/nginx/certs/server.key
+```
+
+La clave privada se genera dentro del contenedor en cada build — nunca se almacena en el repositorio.
+
+---
+
+#### `frontend/nginx.conf` y `frontend/nginx.docker.conf`
+
+Cambios en la directiva `server`:
+
+```nginx
+# Antes:
+listen 3000;
+
+# Después:
+listen 3000 ssl;
+ssl_certificate     /etc/nginx/certs/server.crt;
+ssl_certificate_key /etc/nginx/certs/server.key;
+ssl_protocols       TLSv1.2 TLSv1.3;
+ssl_prefer_server_ciphers on;
+ssl_ciphers  ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:
+             ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
+ssl_session_cache   shared:SSL:10m;
+ssl_session_timeout 10m;
+```
+
+Solo TLS 1.2 y 1.3 habilitados. Los ciphers seleccionados corresponden a los suites recomendados por OWASP TLS Cheat Sheet (Forward Secrecy via ECDHE).
+
+**`nginx.conf` también recibió:**
+- Bloque `location /api/` con `proxy_pass http://backend:8000/api/` — antes solo existía en `nginx.docker.conf`
+- CSP actualizada: se eliminó `http://localhost:8000` de `connect-src`. Ahora es solo `'self'` porque todas las peticiones al backend pasan por el proxy nginx, sin requests directas del navegador al puerto 8000
+
+---
+
+#### `frontend/docker-compose.yml`
+
+```yaml
+# Antes:
+VITE_API_BASE_URL: http://localhost:8000/api/v1/
+
+# Después:
+VITE_API_BASE_URL: /api/v1/   # URL relativa — nginx hace el proxy
+extra_hosts:
+  - "backend:host-gateway"    # Permite que nginx resuelva 'backend' como la IP del host
+```
+
+El cambio a URL relativa elimina el problema de **mixed content**: el navegador cargaba la página por HTTPS pero hacía las peticiones al backend por HTTP. Con el proxy nginx, el navegador solo ve peticiones HTTPS a `'self'` (mismo origen).
+
+---
+
+### 23.4 Flujo de tráfico antes y después
+
+**Antes:**
+```
+Navegador  ──HTTP──►  nginx:3000  (texto plano)
+Navegador  ──HTTP──►  backend:8000/api/  (texto plano, mixed content)
+```
+
+**Después:**
+```
+Navegador  ──HTTPS──►  nginx:3000  (cifrado TLS)
+nginx      ──HTTP──►   backend:8000/api/  (red interna Docker, no expuesta al exterior)
+```
+
+El tramo nginx → backend es HTTP pero ocurre dentro de la red Docker, inaccesible desde el exterior. El único tramo expuesto (navegador ↔ nginx) está cifrado.
+
+---
+
+### 23.5 Instrucciones de uso
+
+```bash
+# Reconstruir y levantar (obligatorio tras cambios en Dockerfile/nginx.conf)
+docker compose up --build
+
+# Acceder en el navegador:
+https://localhost:3000
+```
+
+Al acceder por primera vez el navegador muestra advertencia de certificado autofirmado:
+- **Chrome/Edge:** "Tu conexión no es privada" → "Avanzado" → "Continuar a localhost (no seguro)"
+- **Firefox:** "Advertencia: Riesgo de seguridad potencial" → "Avanzado" → "Aceptar el riesgo y continuar"
+
+Una vez aceptado, todas las peticiones (incluyendo login) viajan cifradas por TLS — las credenciales no son visibles en texto plano en DevTools → Network ni en capturas de red.
+
+---
+
+### 23.6 Limitaciones
+
+| Limitación | Descripción |
+|---|---|
+| Certificado autofirmado | El navegador muestra advertencia. No válido para producción — requiere certificado de CA reconocida |
+| Clave generada en build | Se regenera en cada `docker build`. No persistente entre builds (no es problema en desarrollo) |
+| Tramo nginx→backend en HTTP | Aceptable en red Docker interna. En producción con servicios en hosts separados se requeriría TLS también en el backend |
+
+---
+
+## 24. Actualización — Auto-inyección de administrador en crear servicio y paneles de vinculación (8 de mayo de 2026)
+
+**Motivo:** Se detectaron dos problemas funcionales pendientes:
+
+1. Al crear un servicio, el formulario mostraba un campo `administrator_id` que el usuario tenía que rellenar manualmente. Esto es incorrecto: el administrador que está creando el servicio _es_ el administrador responsable; el ID debe tomarse automáticamente de la sesión.
+2. El backend expone endpoints completos de vinculación (Gerente↔Servicio, Dispositivo↔Servicio, Rol↔Usuario) pero ninguna pantalla del frontend los consumía. No había forma de asignar o quitar estas relaciones desde la interfaz.
+
+---
+
+### 24.1 Fix — `administrator_id` oculto y auto-inyectado en crear servicio
+
+**Archivos modificados:** `src/pages/Servicios.tsx`, `src/shared/api/types.ts`
+
+El campo `administrator_id` ya existía en el `fieldsConfig` como un `select` con opciones de administradores disponibles. Se cambió a `hidden: true` para que el componente `EditarDialog` lo omita visualmente:
+
+```typescript
+// Antes — el usuario tenía que escoger un administrador
+fieldsConfig = {
+    administrator_id: {
+        type: "select",
+        options: adminOptions,
+        helperText: "Selecciona el administrador responsable del servicio",
+    },
+    ...
+}
+
+// Después — campo oculto, valor inyectado desde la sesión
+fieldsConfig = {
+    administrator_id: {
+        hidden: true,   // EditarDialog no renderiza este campo
+    },
+    ...
+}
+```
+
+El valor se sigue enviando al backend mediante `defaultValues`:
+
+```typescript
+defaultValues={{ administrator_id: session?.accountId } as Partial<ServiceResponse>}
+```
+
+`EditarDialog` incluye los campos de `defaultValues` en el payload POST aunque sean `hidden`, por lo que el backend recibe el UUID correcto sin que el usuario pueda modificarlo.
+
+Se eliminaron adicionalmente las variables `adminOptions` y `devicesData` que quedaron sin uso.
+
+---
+
+### 24.2 Nuevo componente reutilizable — `LinkPanel`
+
+**Archivo:** `src/components/LinkPanel.tsx` (nuevo)
+
+Componente genérico para gestionar cualquier relación de vinculación (join-table) entre dos entidades. Parámetros principales:
+
+| Prop | Tipo | Descripción |
+|---|---|---|
+| `title` | `string` | Encabezado del panel, e.g. "Gerentes asignados" |
+| `session` | `SessionCredentials` | Sesión activa para cabeceras de autenticación |
+| `listEndpoint` | `string` | GET que devuelve los vínculos actuales como array |
+| `linkedIdField` | `string` | Campo del vínculo que contiene el ID del objeto vinculado |
+| `addMode` | `"path" \| "body"` | Cómo se envía el ID: en la URL o en el body JSON |
+| `addEndpoint` | `string` | URL base para el POST de asignación |
+| `addBodyKey` | `string?` | Clave del body cuando `addMode = "body"` |
+| `removeEndpoint` | `string` | URL base para el DELETE de desvinculación |
+| `allItemsEndpoint` | `string` | GET de todos los elementos disponibles (PageResponse) |
+| `getItemLabel` | `(item) => string` | Función para mostrar el nombre legible de cada opción |
+
+**Comportamiento:**
+
+- Carga los vínculos actuales con `useGetQuery` y los muestra como `Chip` con botón de eliminar (🔗off)
+- Carga todos los ítems disponibles y filtra los ya vinculados del autocomplete
+- Al hacer clic en "Vincular" ejecuta el POST correspondiente
+- Al hacer clic en el icono de un chip ejecuta el DELETE correspondiente
+- Invalida automáticamente la query de la lista tras cada operación via `useQueryClient`
+- Incluye validación de UUID antes de construir la URL (`isValidId`) para prevenir inyección de path
+
+```tsx
+<LinkPanel
+    title="Gerentes asignados"
+    session={session!}
+    listEndpoint={`services/${row.id}/managers`}
+    linkedIdField="manager_id"
+    addMode="path"                              // POST services/{sid}/managers/{mid}
+    addEndpoint={`services/${row.id}/managers`}
+    removeEndpoint={`services/${row.id}/managers`}
+    allItemsEndpoint="managers/?limit=500"
+    getItemLabel={(item) => `${item.first_name} ${item.last_name}`}
+/>
+```
+
+---
+
+### 24.3 Extensión de `Gestion.tsx` — prop `renderLinkPanel`
+
+**Archivo modificado:** `src/components/Gestion.tsx`
+
+Se añadió la prop opcional `renderLinkPanel`:
+
+```typescript
+interface GestionProps<T extends GenericDataWithId> {
+    // ...props existentes...
+    /** Cuando se provee, muestra un botón "Vínculos" que abre un Dialog con este contenido. */
+    renderLinkPanel?: (row: T) => React.ReactNode;
+}
+```
+
+**Cambios en la columna de acciones:**
+- Si `renderLinkPanel` está definido, se añade un botón "Vínculos" (`LinkIcon`) antes de los botones existentes
+- El ancho de la columna se amplía en 110 px automáticamente
+- Al pulsar el botón se guarda la fila en el estado `linkRow`
+
+**Nuevo diálogo:**
+```tsx
+{renderLinkPanel && linkRow && (
+    <Dialog open={!!linkRow} onClose={() => setLinkRow(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Vínculos — {resolveEntityName(linkRow)}</DialogTitle>
+        <DialogContent dividers>
+            {renderLinkPanel(linkRow)}
+        </DialogContent>
+        <DialogActions>
+            <Button onClick={() => setLinkRow(null)}>Cerrar</Button>
+        </DialogActions>
+    </Dialog>
+)}
+```
+
+---
+
+### 24.4 Paneles implementados por pantalla
+
+#### Servicios (`src/pages/Servicios.tsx`)
+
+Cada fila de la tabla muestra el botón "Vínculos". Al pulsarlo se abre un diálogo con dos paneles:
+
+**Panel 1 — Gerentes asignados**
+- Lista: `GET /api/v1/services/{id}/managers` → array de `{ manager_id, service_id, ... }`
+- Asignar: `POST /api/v1/services/{id}/managers/{manager_id}` (sin body)
+- Quitar: `DELETE /api/v1/services/{id}/managers/{manager_id}`
+- Pool de opciones: `GET /api/v1/managers/?limit=500`
+
+**Panel 2 — Dispositivos asignados**
+- Lista: `GET /api/v1/services/{id}/devices` → array de `{ device_id, service_id, ... }`
+- Asignar: `POST /api/v1/services/{id}/devices/{device_id}` (sin body)
+- Quitar: `DELETE /api/v1/services/{id}/devices/{device_id}`
+- Pool de opciones: `GET /api/v1/devices/?limit=500`
+
+#### Roles (`src/pages/Roles.tsx`)
+
+**Panel — Usuarios asignados a este rol**
+- Lista: `GET /api/v1/roles/{id}/users` → array de `{ user_id, role_id, ... }`
+- Asignar: `POST /api/v1/roles/{id}/users` con body `{ "user_id": "..." }` (addMode = "body")
+- Quitar: `DELETE /api/v1/roles/{id}/users/{user_id}`
+- Pool de opciones: `GET /api/v1/users/?limit=500`
+
+---
+
+### 24.5 Tipos añadidos a `types.ts`
+
+```typescript
+export interface ManagerServiceResponse {
+    id: string;
+    manager_id: string;
+    service_id: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface DeviceServiceResponse {
+    id: string;
+    device_id: string;
+    service_id: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface UserRoleResponse {
+    id: string;
+    user_id: string;
+    role_id: string;
+    created_at: string;
+    updated_at: string;
+}
+```
+
+---
+
+### 24.6 Relación Servicio↔Usuario
+
+No existe un endpoint directo para vincular usuarios a servicios. La relación se gestiona a través de roles: cada `Role` pertenece a un `service_id` y los usuarios se asignan a roles. El panel Roles↔Usuario (§24.4) cubre esta necesidad indirectamente.
+
+---
+
+### 24.7 Resumen de archivos modificados / creados
+
+| Archivo | Tipo | Cambio |
+|---|---|---|
+| `src/shared/api/types.ts` | Modificado | Añadidos `ManagerServiceResponse`, `DeviceServiceResponse`, `UserRoleResponse` |
+| `src/components/LinkPanel.tsx` | **Nuevo** | Componente genérico de paneles de vinculación |
+| `src/components/Gestion.tsx` | Modificado | Nueva prop `renderLinkPanel`, botón "Vínculos" y diálogo asociado |
+| `src/pages/Servicios.tsx` | Modificado | `administrator_id` oculto + auto-inyectado; paneles Gerente y Dispositivo |
+| `src/pages/Roles.tsx` | Modificado | Panel de vinculación Usuario↔Rol |
+
+---
+
+## 25. Pruebas de funcionalidad de la API — inventario de operaciones (9 de mayo de 2026)
+
+### 25.1 Contexto
+
+Se realizaron pruebas funcionales completas contra el backend IOT-Server (FastAPI + SQLite) corriendo en Docker (`http://localhost:8000/api/v1`). El objetivo fue verificar todas las operaciones CRUD y de vinculación expuestas por la API, y documentar el inventario completo de endpoints con sus códigos HTTP de respuesta esperados.
+
+Las pruebas se ejecutaron como script Python dentro del contenedor `iot-backend` usando `docker exec -i iot-backend python3`. Se utilizó la librería estándar `urllib.request` (sin dependencias externas) para hacer las peticiones HTTP.
+
+---
+
+### 25.2 Correcciones al backend (artefactos del merge)
+
+Antes de poder ejecutar las pruebas, fue necesario corregir 9 defectos introducidos por el merge upstream en el backend. Estos defectos impedían el arranque completo del servidor:
+
+| # | Archivo | Problema | Corrección |
+|---|---|---|---|
+| 1 | `app/database/model.py` | Bloque huérfano dentro de la clase `Role` con referencia a `Role` antes de estar definida → `NameError` | Eliminado el bloque (pertenecía a clase `RolePermission` cuyo encabezado se perdió en el merge) |
+| 2 | `app/database/model.py` | Clase `AuditLog` referenciada en `app/domain/audit/repository.py` pero no existía en el modelo | Añadida clase `AuditLog` al final del archivo |
+| 3 | `app/config.py` | `SessionRepository.store_session()` usaba `settings.SESSION_TTL_SECONDS` pero el campo no existía en `Settings` | Añadido `SESSION_TTL_SECONDS: int = 3600` |
+| 4 | `app/shared/rate_limit.py` | `app/shared/auth/controller.py` y `app/shared/base_domain/controller.py` importaban `enforce_request_rate_limit` pero la función no existía | Implementada usando `SessionRepository` de Valkey |
+| 5 | `pyproject.toml` | `from loguru import logger` en múltiples módulos pero `loguru` no estaba en dependencias | Añadido `"loguru>=0.7.0"` |
+| 6 | `app/main.py` | `lifespan` llamaba a `init_logging()` sin importar `init_logging` | Añadido `from app.shared.logging import init_logging` |
+| 7 | `app/main.py` | `app.add_middleware(Human)` duplicado | Eliminado el duplicado |
+| 8 | `app/main.py` | `app.include_router(role_router, ...)` duplicado | Eliminado el duplicado |
+| 9 | `app/shared/authorization/oso_config.py` | `oso.register_class(Role)` llamado dos veces → `DuplicateClassAliasError` en todos los endpoints protegidos → HTTP 500 | Eliminado el import y registro duplicado de `Role` |
+
+Adicionalmente, fue necesario resetear el esquema SQLite (volumen Docker `iot-server_sqlite_data`) para que refleja la nueva columna `xmss_public_root` añadida en el merge.
+
+---
+
+### 25.3 Reglas de negocio descubiertas durante las pruebas
+
+| Regla | Detalle |
+|---|---|
+| **Paginación** | Respuesta `GET /list` tiene estructura `{total, offset, limit, data: []}` (clave `data`, no `items`) |
+| **DELETE → 204** | Todas las operaciones de borrado retornan HTTP 204 No Content (cuerpo vacío) |
+| **Rate limiting** | Máximo 3 peticiones por segundo por endpoint (respaldado por Valkey). Exceder devuelve 429 con cabecera `Retry-After` |
+| **CURP obligatoria** | Formato CURP mexicano de 18 caracteres con dígito verificador. Posiciones 14-16 deben ser consonantes. Código de estado debe ser uno de los 32 estados válidos de México |
+| **RFC obligatorio** | Formato RFC mexicano: 4 letras (persona física) ó 3 letras (persona moral) + 6 dígitos (fecha) + 3 alfanuméricos |
+| **PersonalData extra="forbid"** | No se permiten campos extra en el body de administradores/gerentes/usuarios (422 si se envía campo desconocido como `is_master`) |
+| **Nombre de rol** | Solo letras (sin dígitos, espacios ni símbolos). Validado con `isalpha()` |
+| **Application — campos requeridos** | `name`, `version`, `url`, `description` son NOT NULL en el modelo aunque el schema los marca como opcionales — deben enviarse siempre |
+| **CURP/RFC únicos** | Restricción UNIQUE en base de datos. Cada persona debe tener CURP y RFC distintos entre sí |
+
+---
+
+### 25.4 Inventario de endpoints CRUD
+
+| Método | Endpoint | Descripción | HTTP esperado |
+|---|---|---|---|
+| `POST` | `/auth-rc/master/login` | Login administrador master | 200 |
+| `POST` | `/auth-rc/admin/login` | Login administrador no-master | 200 |
+| `POST` | `/auth-rc/manager/login` | Login gerente | 200 |
+| `POST` | `/auth-rc/user/login` | Login usuario final | 200 |
+| `POST` | `/auth/logout` | Cierre de sesión (invalida token en Valkey) | 200 |
+| `PATCH` | `/auth/change-password` | Cambio de contraseña autenticado | 200 |
+| **Administradores** | | | |
+| `GET` | `/administrators/` | Listar administradores (paginado) | 200 |
+| `POST` | `/administrators/` | Crear administrador | 201 |
+| `GET` | `/administrators/{id}` | Obtener administrador por ID | 200 |
+| `PATCH` | `/administrators/{id}` | Actualizar administrador | 200 |
+| `DELETE` | `/administrators/{id}` | Eliminar administrador | 204 |
+| **Gerentes** | | | |
+| `GET` | `/managers/` | Listar gerentes (paginado) | 200 |
+| `POST` | `/managers/` | Crear gerente | 201 |
+| `GET` | `/managers/{id}` | Obtener gerente por ID | 200 |
+| `PATCH` | `/managers/{id}` | Actualizar gerente | 200 |
+| `DELETE` | `/managers/{id}` | Eliminar gerente | 204 |
+| **Usuarios** | | | |
+| `GET` | `/users/` | Listar usuarios (paginado) | 200 |
+| `POST` | `/users/` | Crear usuario | 201 |
+| `GET` | `/users/{id}` | Obtener usuario por ID | 200 |
+| `PATCH` | `/users/{id}` | Actualizar usuario | 200 |
+| `DELETE` | `/users/{id}` | Eliminar usuario | 204 |
+| **Dispositivos** | | | |
+| `GET` | `/devices/` | Listar dispositivos (paginado) | 200 |
+| `POST` | `/devices/` | Crear dispositivo | 201 |
+| `GET` | `/devices/{id}` | Obtener dispositivo por ID | 200 |
+| `PATCH` | `/devices/{id}` | Actualizar dispositivo | 200 |
+| `DELETE` | `/devices/{id}` | Eliminar dispositivo | 204 |
+| **Aplicaciones** | | | |
+| `GET` | `/applications/` | Listar aplicaciones (paginado) | 200 |
+| `POST` | `/applications/` | Crear aplicación | 201 |
+| `GET` | `/applications/{id}` | Obtener aplicación por ID | 200 |
+| `PATCH` | `/applications/{id}` | Actualizar aplicación | 200 |
+| `DELETE` | `/applications/{id}` | Eliminar aplicación | 204 |
+| **Servicios** | | | |
+| `GET` | `/services/` | Listar servicios (paginado) | 200 |
+| `POST` | `/services/` | Crear servicio | 201 |
+| `GET` | `/services/{id}` | Obtener servicio por ID | 200 |
+| `PATCH` | `/services/{id}` | Actualizar servicio | 200 |
+| `DELETE` | `/services/{id}` | Eliminar servicio | 204 |
+| **Roles** | | | |
+| `GET` | `/roles/` | Listar roles (paginado) | 200 |
+| `POST` | `/roles/` | Crear rol (requiere `service_id`) | 201 |
+| `GET` | `/roles/{id}` | Obtener rol por ID | 200 |
+| `PATCH` | `/roles/{id}` | Actualizar rol | 200 |
+| `DELETE` | `/roles/{id}` | Eliminar rol | 204 |
+
+---
+
+### 25.5 Inventario de endpoints de vinculación (join tables)
+
+| Método | Endpoint | Descripción | HTTP esperado |
+|---|---|---|---|
+| **Servicio ↔ Gerente** | | | |
+| `POST` | `/services/{sid}/managers/{mid}` | Vincular gerente a servicio | 201 |
+| `GET` | `/services/{sid}/managers` | Listar gerentes de un servicio | 200 |
+| `DELETE` | `/services/{sid}/managers/{mid}` | Desvincular gerente de servicio | 204 |
+| **Servicio ↔ Dispositivo** | | | |
+| `POST` | `/services/{sid}/devices/{did}` | Vincular dispositivo a servicio | 201 |
+| `GET` | `/services/{sid}/devices` | Listar dispositivos de un servicio | 200 |
+| `DELETE` | `/services/{sid}/devices/{did}` | Desvincular dispositivo de servicio | 204 |
+| **Servicio ↔ Aplicación** | | | |
+| `POST` | `/services/{sid}/applications/{aid}` | Vincular aplicación a servicio | 201 |
+| `GET` | `/services/{sid}/applications` | Listar aplicaciones de un servicio | 200 |
+| `DELETE` | `/services/{sid}/applications/{aid}` | Desvincular aplicación de servicio | 204 |
+| **Rol ↔ Usuario** | | | |
+| `POST` | `/roles/{rid}/users` | Vincular usuario a rol (body: `{user_id}`) | 201 |
+| `GET` | `/roles/{rid}/users` | Listar usuarios de un rol | 200 |
+| `DELETE` | `/roles/{rid}/users/{uid}` | Desvincular usuario de rol | 204 |
+
+---
+
+### 25.6 Resultado final de las pruebas
+
+**49/49 pruebas PASS** en una sola ejecución limpia, cubriendo:
+
+- 1 login + 1 logout
+- 5 entidades × 5 operaciones CRUD = 25 pruebas CRUD
+- 4 relaciones × 3 operaciones (vincular / listar / desvincular) = 12 pruebas de vinculación  
+- 7 operaciones de borrado (cleanup)
+- 4 operaciones de listado + obtención por ID extras
+
+**Comando de ejecución:**
+```bash
+# Script Python ejecutado dentro del contenedor
+docker exec -i iot-backend python3 << 'EOF'
+# Script usa urllib.request estándar, genera TAG aleatorio de consonantes
+# para CURP únicos y agrega delay=1.1s entre peticiones para respetar rate limit
+EOF
+```
+
+**Schemas de creación (resumen):**
+
+```python
+# PersonalData (administradores, gerentes, usuarios)
+{
+  "email": "...", "password": "...",
+  "first_name": "...", "last_name": "...", "second_last_name": "...",
+  "phone": "5550000001",          # 10-15 dígitos
+  "address": "Calle 123",
+  "city": "CDMX", "state": "DF", "postal_code": "06600",
+  "birth_date": "1980-01-01T00:00:00",
+  "curp": "TAAS800101HDFBJX03",   # 18 chars, dígito verificador
+  "rfc": "TAAS800101JXA"          # 13 chars RFC mexicano
+}
+
+# Dispositivo
+{"name": "Sensor-01", "brand": "Acme", "serial_number": "SN-001", "ip": "192.168.1.10"}
+
+# Aplicación (todos los campos requeridos en la BD)
+{"name": "MiApp", "version": "1.0", "url": "https://...", "description": "...", "administrator_id": "<UUID>"}
+
+# Servicio
+{"name": "MiServicio", "description": "...", "administrator_id": "<UUID>"}
+
+# Rol
+{"name": "tester", "service_id": "<UUID>"}   # nombre: solo letras
+```
+
+---
+
+### 25.7 Flujo recomendado para creación de entidades
+
+El orden correcto para crear entidades sin conflictos de dependencias es:
+
+```
+1. Login (obtener token)
+2. Crear Administrador
+3. Crear Gerente, Usuario, Dispositivo (sin dependencias)
+4. Crear Aplicación (requiere administrator_id)
+5. Crear Servicio (requiere administrator_id)
+6. Crear Rol (requiere service_id)
+7. Vincular: Servicio↔Gerente, Servicio↔Dispositivo, Servicio↔Aplicación, Rol↔Usuario
+8. Eliminar en orden inverso: Rol → Servicio → Aplicación → Dispositivo → Usuario → Gerente → Administrador
+```
+
+---
+
+### 25.8 Archivos del backend corregidos en esta sesión
+
+| Archivo | Cambio |
+|---|---|
+| `app/database/model.py` | Eliminado bloque huérfano en `Role`; añadida clase `AuditLog` |
+| `app/config.py` | Añadido `SESSION_TTL_SECONDS: int = 3600` |
+| `app/shared/rate_limit.py` | Implementadas `build_rate_limit_key`, `_get_rate_limit_repository`, `enforce_request_rate_limit` |
+| `app/main.py` | Añadido import `init_logging`; eliminados middleware y router duplicados |
+| `app/shared/authorization/oso_config.py` | Eliminado `import Role` y `oso.register_class(Role)` duplicados |
+| `pyproject.toml` | Añadida dependencia `loguru>=0.7.0` |
+
+---
+
+## 26. Actualización del frontend — integración completa con todas las funcionalidades del backend (9 de mayo de 2026)
+
+### 26.1 Objetivo
+
+Alinear el frontend con la totalidad de funcionalidades que el backend expone: operaciones CRUD verificadas, relaciones de vinculación entre entidades, y validaciones coherentes con los schemas de Pydantic del servidor.
+
+---
+
+### 26.2 Análisis de estado previo
+
+Antes de esta sesión, el frontend tenía los siguientes desvíos respecto al backend:
+
+| Archivo | Problema identificado |
+|---|---|
+| `validation.ts` — `generateDeviceSchema` | `model` y `mac` marcados como **requeridos** al crear; el backend los define como `str \| None = None` (opcionales) |
+| `Servicios.tsx` | Sólo tenía paneles de vinculación para **Gerentes** y **Dispositivos**; faltaba el panel de **Aplicaciones** (`services/{id}/applications`) |
+| `Aplicaciones.tsx` | `administrator_id` estaba en `defaultValues` pero no en `fieldsConfig` como `hidden: true`, por lo que el campo era visible en el formulario de creación |
+| `Gerentes.tsx` | Faltaban las props `showDetail={true}` y `entityTypeLabel` presentes en todos los demás módulos de personal |
+
+---
+
+### 26.3 Cambios realizados
+
+#### `frontend/src/shared/api/schemas/validation.ts`
+
+Se corrigió `generateDeviceSchema`: los campos `model` y `mac` pasaron de requeridos (cuando `isRequired=true`) a siempre opcionales, reflejando el schema del backend:
+
+```python
+# Backend: app/domain/device/schemas.py
+class DeviceCreate(BaseModel):
+    name: str
+    brand: str | None = None
+    model: str | None = None      # opcional
+    serial_number: str | None = None
+    ip: str | None = None
+    mac: str | None = None        # opcional
+```
+
+Antes:
+```typescript
+model: Yup.string().max(100).when([], {
+    is: () => isRequired,
+    then: (s) => s.required("Campo obligatorio"),
+}),
+```
+
+Después:
+```typescript
+model: Yup.string().max(100, "Máximo 100 caracteres").optional(),
+```
+
+Idéntico cambio para `mac`.
+
+---
+
+#### `frontend/src/pages/Servicios.tsx`
+
+Se añadió el tercer `LinkPanel` dentro de `renderLinkPanel` para vincular **Aplicaciones** a un Servicio:
+
+```tsx
+<LinkPanel
+    title="Aplicaciones asignadas"
+    session={session!}
+    listEndpoint={`services/${row.id}/applications`}
+    linkedIdField="application_id"
+    addMode="path"
+    addEndpoint={`services/${row.id}/applications`}
+    removeEndpoint={`services/${row.id}/applications`}
+    allItemsEndpoint="applications/?limit=500"
+    getItemLabel={(item) => `${item.name ?? ""}`.trim()}
+/>
+```
+
+Los endpoints utilizados están verificados en la suite de 49 pruebas:
+- `POST /services/{sid}/applications/{aid}` → 201
+- `GET /services/{sid}/applications` → 200 (array de `ApplicationServiceResponse`)
+- `DELETE /services/{sid}/applications/{aid}` → 204
+
+---
+
+#### `frontend/src/pages/Aplicaciones.tsx`
+
+Se añadió `fieldsConfig` para ocultar el campo `administrator_id` del formulario. El campo sigue siendo enviado al backend a través de `defaultValues`:
+
+```tsx
+<Gestion<ApplicationResponse>
+    ...
+    defaultValues={{ administrator_id: session?.accountId } as Partial<ApplicationResponse>}
+    fieldsConfig={{ administrator_id: { hidden: true } }}
+    ...
+/>
+```
+
+Esto es consistente con el patrón ya aplicado en `Servicios.tsx`.
+
+---
+
+#### `frontend/src/pages/Gerentes.tsx`
+
+Se añadieron `showDetail={true}` y `entityTypeLabel="Gerente"` para que el módulo tenga las mismas capacidades de detalle que `Administradores.tsx` y `Usuarios.tsx`:
+
+```tsx
+<Gestion<PersonalDataResponse>
+    ...
+    getEntityName={(row) => `${row.first_name} ${row.last_name}`}
+    showDetail={true}
+    entityTypeLabel="Gerente"
+/>
+```
+
+---
+
+### 26.4 Verificación
+
+Todos los archivos modificados fueron validados con el compilador TypeScript de VS Code — **sin errores**.
+
+| Archivo | Estado |
+|---|---|
+| `validation.ts` | ✅ Sin errores |
+| `Servicios.tsx` | ✅ Sin errores |
+| `Aplicaciones.tsx` | ✅ Sin errores |
+| `Gerentes.tsx` | ✅ Sin errores |
+
+---
+
+### 26.5 Estado final de vinculaciones del frontend
+
+| Relación | Panel ubicado en | Endpoint principal | Estado |
+|---|---|---|---|
+| Servicio ↔ Gerente | `Servicios.tsx` | `services/{id}/managers` | ✅ Implementado |
+| Servicio ↔ Dispositivo | `Servicios.tsx` | `services/{id}/devices` | ✅ Implementado |
+| Servicio ↔ Aplicación | `Servicios.tsx` | `services/{id}/applications` | ✅ **Añadido esta sesión** |
+| Rol ↔ Usuario | `Roles.tsx` | `roles/{id}/users` | ✅ Implementado |
+
+---
+
+### 26.6 Estado final de módulos CRUD
+
+| Módulo | CRUD | Campo oculto auto-inyectado | Detalle | Vinculaciones |
+|---|---|---|---|---|
+| Administradores | ✅ | — | ✅ | — |
+| Gerentes | ✅ | — | ✅ **actualizado** | — |
+| Usuarios | ✅ | — | ✅ | — |
+| Dispositivos | ✅ | — | ✅ | — |
+| Aplicaciones | ✅ | `administrator_id` ✅ **corregido** | — | — |
+| Servicios | ✅ | `administrator_id` | — | Gerentes, Dispositivos, Aplicaciones ✅ |
+| Roles | ✅ | — | — | Usuarios ✅ |
+
+

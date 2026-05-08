@@ -10,7 +10,13 @@ const RC_SERVER_KEY     = import.meta.env.VITE_APP_SERVER_KEY     as string | un
 
 interface AuthContextType {
     session: SessionCredentials | null;
-    login: (email: string, password: string, endpoint?: string) => void;
+    login: (
+        email: string,
+        password: string,
+        endpoint?: string,
+        requiredAccountType?: string,
+        requiredIsMaster?: boolean,
+    ) => void;
     logout: () => void;
     loginError: string | null;
     isLoggingIn: boolean;
@@ -81,7 +87,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [session]);
 
     const mutation = useMutation({
-        mutationFn: async (credentials: { email: string; password: string; endpoint: string }) => {
+        mutationFn: async (credentials: {
+            email: string;
+            password: string;
+            endpoint: string;
+            requiredAccountType?: string;
+            requiredIsMaster?: boolean;
+        }) => {
             // Verificación RC: confirmar que el backend es el original antes de enviar credenciales.
             // Si ya fue verificado en esta sesión de navegador (sessionStorage), omitir el puzzle
             // para evitar el rechazo 401 por sesión RC activa en Valkey.
@@ -111,7 +123,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 throw new Error(typeof detail === "string" ? detail : `Error ${response.status}`);
             }
 
-            return response.json() as Promise<TokenResponse>;
+            const tokenData = await (response.json() as Promise<TokenResponse>);
+
+            // ── Validación de tipo de cuenta ──────────────────────────────────────────────
+            // Verificamos que el account_type e is_master devueltos por el servidor coincidan
+            // con el tipo de acceso esperado por esta pantalla de login.
+            // Si no coinciden, NUNCA establecemos sesión — la cuenta queda sin autenticar.
+            // El mensaje de error no revela qué tipo de cuenta tiene el email (anti-enumeración).
+            if (credentials.requiredAccountType && tokenData.account_type !== credentials.requiredAccountType) {
+                throw new Error("Las credenciales no corresponden a este tipo de acceso.");
+            }
+            if (
+                credentials.requiredIsMaster !== undefined &&
+                Boolean(tokenData.is_master) !== credentials.requiredIsMaster
+            ) {
+                throw new Error("Las credenciales no corresponden a este tipo de acceso.");
+            }
+
+            return tokenData;
         },
         onSuccess: (data: TokenResponse) => {
             setLoginError(null);
@@ -136,9 +165,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         },
     });
 
-    const login = (email: string, password: string, endpoint?: string) => {
+    const login = (
+        email: string,
+        password: string,
+        endpoint?: string,
+        requiredAccountType?: string,
+        requiredIsMaster?: boolean,
+    ) => {
         setLoginError(null);
-        mutation.mutate({ email, password, endpoint: endpoint || "auth/login" });
+        mutation.mutate({
+            email,
+            password,
+            endpoint: endpoint || "auth/login",
+            requiredAccountType,
+            requiredIsMaster,
+        });
     };
 
     const logout = () => {

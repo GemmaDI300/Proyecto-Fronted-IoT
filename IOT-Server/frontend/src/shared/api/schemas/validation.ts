@@ -218,10 +218,7 @@ export const generateDeviceSchema = (isRequired = false) => {
             }),
         model: Yup.string()
             .max(100, "Máximo 100 caracteres")
-            .when([], {
-                is: () => isRequired,
-                then: (s) => s.required("Campo obligatorio"),
-            }),
+            .optional(),
         serial_number: Yup.string()
             .max(100, "Máximo 100 caracteres")
             .when([], {
@@ -250,10 +247,7 @@ export const generateDeviceSchema = (isRequired = false) => {
                 /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/,
                 "Formato MAC inválido (ej: AA:BB:CC:DD:EE:FF)"
             )
-            .when([], {
-                is: () => isRequired,
-                then: (s) => s.required("Campo obligatorio"),
-            }),
+            .optional(),
         ...(isRequired ? {} : { is_active: Yup.boolean().optional() }),
     });
 };

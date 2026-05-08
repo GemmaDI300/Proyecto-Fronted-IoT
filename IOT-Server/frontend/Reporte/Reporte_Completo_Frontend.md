@@ -20,6 +20,7 @@
 9. [Características de Seguridad](#9-características-de-seguridad)
 10. [Diagrama de Flujo de Procesos](#10-diagrama-de-flujo-de-procesos)
 11. [Matriz de Permisos por Rol](#11-matriz-de-permisos-por-rol)
+12. [Manejo de Peticiones Corruptas y Maliciosas](#12-manejo-de-peticiones-corruptas-y-maliciosas)
 
 ---
 
@@ -696,14 +697,34 @@ Todas las peticiones (excepto login) llevan la cabecera: `Authorization: Bearer 
 
 ## 9. Características de Seguridad
 
-### 9.1 Autenticación con JWT
+### 9.1 Autenticación con JWT y React Context (AuthContext)
 
-**Archivo:** `shared/auth/authContext.tsx`  
-**Cómo funciona:**
-- El login hace `POST auth/login` con email/password y recibe un `access_token` (JWT Bearer)
-- El token se almacena en **`sessionStorage`** (no `localStorage`): se destruye al cerrar la pestaña/navegador, reduciendo el riesgo de robo de sesión persistente
-- En cada carga de la app, `loadSession()` **decodifica el payload del JWT** (campo `exp`) y verifica que no haya expirado. Si expiró, elimina la sesión automáticamente
-- Todas las peticiones autenticadas incluyen `Authorization: Bearer <token>` en las cabeceras HTTP
+**Archivo:** `shared/auth/authContext.tsx`
+
+El frontend gestiona toda la sesión del usuario mediante el **React Context de autenticación** (`AuthContext`). Este contexto actúa como la única fuente de verdad sobre el estado de sesión y expone las funciones `login`, `logout` y `loadSession` a toda la aplicación a través de un Provider envuelto en el árbol de componentes desde `main.tsx`.
+
+**Cómo funciona la autenticación con el backend (paso a paso):**
+
+1. El usuario introduce sus credenciales en el formulario de login (`LoginBase.tsx`)
+2. `LoginBase` llama a `login(email, password, endpoint)` del `AuthContext`
+3. `AuthContext.login()` ejecuta `POST {endpoint}` (ej. `auth/login`) con el body `{email, password}` en JSON
+4. El backend verifica las credenciales y devuelve un JWT: `{access_token, token_type, account_type, is_master}`
+5. El frontend **decodifica el payload del JWT** (usando `atob` sobre el segmento Base64 central del token) para extraer el `sub` (accountId) y el campo `exp` (expiración Unix timestamp)
+6. Se construye el objeto `SessionCredentials {token, accountId, accountType, isMaster}` y se persiste en **`sessionStorage`** bajo la clave `"iot_session"`
+7. `setSession(creds)` actualiza el estado global del `AuthContext`, propagando la sesión a todos los componentes suscritos
+8. Todos los hooks de API (`useGetQuery`, `useSendDataMutation`, `useDeleteByIdMutation`) leen el token del contexto e inyectan automáticamente la cabecera `Authorization: Bearer <token>` en cada petición HTTP hacia el backend
+
+**Validación de expiración local:** Cada vez que la app se carga (o recarga), `loadSession()` lee la sesión de `sessionStorage`, decodifica el JWT y compara el campo `exp` con `Date.now() / 1000`. Si el token expiró, elimina la sesión automáticamente y el `ProtectedRoute` redirige al login — sin necesidad de que el backend rechace una petición primero.
+
+**Seguridad del almacenamiento:**
+
+| Característica | Valor |
+|---|---|
+| Almacenamiento | `sessionStorage` (no `localStorage`) |
+| Alcance | Solo la pestaña activa — se destruye al cerrar |
+| Clave de almacenamiento | `"iot_session"` |
+| Cookies | No se usan — elimina riesgo de CSRF |
+| Refresh Token | No implementado — un único `access_token` por sesión |
 
 ---
 
@@ -748,11 +769,22 @@ Admin Master (isMaster=true)  ← acceso total, CRUD admins
 
 **Archivo:** `shared/api/schemas/validation.ts`  
 **Cómo funciona:**
-- `validatePasswordStrength()`: contraseñas de al menos 8 chars, con mayúscula, minúscula, número y carácter especial (`!@#$%^&*(),.?":{}|<>`)
-- Máximo 128 chars en contraseñas (previene DoS por hashing de contraseñas largas)
-- Validación de CURP y RFC con regex estrictos para México
-- Todos los campos de texto: límites de longitud (`min/max`), regex de caracteres permitidos
-- Dirección IP y MAC con formatos específicos para dispositivos
+
+Todos los formularios del sistema utilizan **esquemas Yup** generados dinámicamente. La validación ocurre en el cliente antes de que cualquier dato llegue al backend. Las reglas implementadas siguen las guías OWASP de validación de entradas:
+
+| Campo / Tipo | Regla aplicada |
+|---|---|
+| **Contraseña** | Mínimo 8, máximo 128 chars; requiere mayúscula, minúscula, número y carácter especial |
+| **Email** | Regex RFC 5322 + test `isSafeEmail()` |
+| **CURP** | Regex completo: 4 letras + 6 dígitos + género H/M + clave estado + consonantes |
+| **RFC** | Regex persona física (13 chars) y moral (12 chars) con homoclave |
+| **Nombres y textos** | Solo letras y espacios (`/^[a-zA-ZÀ-ÿ\s]+$/`), límites `min/max`, test `no-html` (bloquea `< > " ' &`) |
+| **IP de dispositivo** | Regex IPv4 `0.0.0.0` – `255.255.255.255` |
+| **MAC address** | Regex HH:HH:HH:HH:HH:HH |
+| **URLs** | Validación de protocolo + dominio + path |
+| **Puerto** | Número entero 1–65535 |
+
+El test `no-html` en Yup bloquea directamente los caracteres usados para construir etiquetas HTML (`< > " ' &`), lo que impide inyectar HTML en campos de texto antes de enviar el formulario.
 
 ---
 
@@ -1050,3 +1082,142 @@ Todas las páginas se cargan con `React.lazy()` + `<Suspense>`. Beneficios de se
 ---
 
 *Reporte generado automáticamente el 28 de abril de 2026.*
+
+---
+
+## 12. Manejo de Peticiones Corruptas y Maliciosas
+
+> **Fuente:** `Reporte_peticiones_corruptas.md` — Pruebas dinámicas ejecutadas el 30 de abril de 2026 mediante el script `test_frontend_exceptions.py` con el sistema corriendo en Docker Compose.
+
+Se ejecutaron **30 pruebas activas** en 5 bloques para verificar cómo el sistema completo (frontend + backend) responde ante peticiones malformadas, corruptas o maliciosas.
+
+### Resumen de resultados
+
+| Bloque | Pruebas | Correctas | Hallazgos |
+|---|:---:|:---:|:---:|
+| 1 — Cuerpo malformado | 8 | 6 | 2 (corregidos) |
+| 2 — Inyección en campos | 7 | 7 | 0 |
+| 3 — JWT inválidos/corruptos | 7 | 5 | 2 (corregidos) |
+| 4 — Rutas y parámetros inválidos | 6 | 6 | 0 |
+| 5 — Headers anómalos | 2 | 1 | 1 (nota de diseño) |
+| **Total** | **30** | **25 → 30** | **5 → 0 críticos** |
+
+Los 5 hallazgos fueron resueltos: 2 correcciones de código en `functions.ts` (VULN-017) y 1 nota de diseño para futura implementación de rate limiting (VULN-003).
+
+---
+
+### Bloque 1 — Cuerpos malformados
+
+Se probaron: body vacío, campo faltante, tipos incorrectos (int/bool en lugar de string), JSON con sintaxis rota, `Content-Type: text/plain`, body como array, payload `null` y campos extra (mass-assignment).
+
+**Hallazgo VULN-017 — `parseApiError` serializaba arrays a JSON crudo (CORREGIDO):**
+
+Cuando el backend retorna HTTP 422, `detail` es un array de objetos `{loc, msg, type}`. El código original hacía `JSON.stringify(detail)`, mostrando texto técnico ilegible al usuario. La corrección extrae solo el mensaje legible de cada elemento:
+
+```typescript
+// ANTES — texto técnico ilegible:
+return JSON.stringify(json.detail);
+// Resultado: [{"type":"missing","loc":["body","password"],"msg":"Field required",...}]
+
+// DESPUÉS — mensaje legible por campo:
+if (Array.isArray(json.detail)) {
+    return json.detail
+        .map((e: { msg?: string; loc?: string[] }) => {
+            const field = e.loc ? e.loc.filter((l) => l !== "body").join(".") : "";
+            return field ? `${field}: ${e.msg ?? "error"}` : (e.msg ?? "error");
+        })
+        .join(" | ");
+}
+// Resultado: "password: Field required"
+```
+
+**Protección anti mass-assignment confirmada:** Pydantic tiene `extra="forbid"`, rechazando cualquier campo no declarado en el schema (`role`, `extra_field`, etc.) con HTTP 422.
+
+---
+
+### Bloque 2 — Inyección en campos
+
+Se probaron: XSS en email, SQL injection clásico, SSTI Jinja2 en password, command injection, null bytes, email de 5000 caracteres, unicode/emoji en password.
+
+**Resultado: 7/7 pruebas correctas.** El backend es inmune gracias a:
+- **SQLModel ORM** con parámetros preparados — sin queries SQL concatenadas
+- **Pydantic** — validación estricta de tipos y longitudes (email máx. 254 chars)
+- **Mensajes de error genéricos** — `"Invalid credentials"` para cualquier fallo de autenticación, sin revelar qué campo específico falló
+
+---
+
+### Bloque 3 — Tokens JWT inválidos o corruptos
+
+Se probaron: sin header `Authorization`, token vacío, token basura, JWT con firma incorrecta, JWT expirado, esquema `Basic` en lugar de `Bearer`, y el ataque `alg:none`.
+
+**Hallazgo VULN-017 (parte 2) — `useGetQuery` ignoraba `parseApiError` (CORREGIDO):**
+
+El hook de queries GET usaba el `statusText` del navegador en lugar del mensaje del backend:
+
+```typescript
+// ANTES — mensaje genérico del browser:
+throw new Error(`Error ${response.status}: ${response.statusText}`);
+// Resultado: "Error 401: Unauthorized"
+
+// DESPUÉS — mensaje semántico del backend:
+throw new Error(await parseApiError(response));
+// Resultado: "Invalid token format" / "Not authenticated"
+```
+
+**Ataque `alg:none` bloqueado (CVE-2015-9235):** El backend usa PyJWT con `algorithms=["HS256"]` explícito, rechazando cualquier token con `alg:none` en el header con HTTP 401.
+
+---
+
+### Bloque 4 — Rutas y parámetros inválidos
+
+Se probaron: ruta inexistente, método HTTP incorrecto, UUID inválido en path param, path traversal (`../../../../etc/passwd`), paginación con valores negativos, SQL injection en query param.
+
+**Resultado: 6/6 pruebas correctas.** El middleware de autenticación del backend intercepta **antes** de que FastAPI valide path params o query params (fail-fast). Uvicorn normaliza las URLs antes de enrutar, haciendo que el path traversal no alcance el sistema de archivos.
+
+---
+
+### Bloque 5 — Headers anómalos
+
+Se probaron: `X-Forwarded-For` falsificado y `Host` manipulado.
+
+**Nota de diseño VULN-003 (pendiente):** El backend acepta `X-Forwarded-For` sin validación. Actualmente inofensivo porque no hay rate limiting. Cuando se implemente, debe usarse `request.client.host` (IP del socket TCP real) en lugar de este header para evitar evasión:
+
+```python
+# ❌ Vulnerable a falsificación:
+client_ip = request.headers.get("X-Forwarded-For", request.client.host)
+
+# ✅ Correcto:
+client_ip = request.client.host
+```
+
+---
+
+### Flujo de manejo de errores en el frontend
+
+Cuando una petición recibe una respuesta de error del backend, el flujo en `functions.ts` es:
+
+```
+response.ok === false
+    │
+    ▼
+parseApiError(response)
+    ├─ Lee body como JSON
+    ├─ detail es string  → retorna el string directamente
+    ├─ detail es array   → extrae field + msg de cada elemento, une con " | "
+    ├─ detail.message    → retorna el mensaje
+    ├─ UNIQUE constraint → "Ya existe un registro con ese valor"
+    └─ Sin detail        → "Error {status}"
+    │
+    ▼
+throw new Error(mensaje_legible)
+    │
+    ▼
+React Query captura el error
+    │
+    ├─ useSendDataMutation → apiError se muestra en Alert dentro del Dialog
+    └─ useGetQuery         → error.message se muestra en la página
+```
+
+---
+
+*Reporte actualizado el 6 de mayo de 2026. Sección 12 integrada desde `Reporte_peticiones_corruptas.md`.*

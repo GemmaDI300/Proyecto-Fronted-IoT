@@ -18,6 +18,10 @@ export interface LoginConfig {
     emailPlaceholder: string;
     warning: string;
     apiEndpoint: string;
+    /** Tipo de cuenta requerido: rechaza la sesión si el servidor devuelve otro tipo. */
+    requiredAccountType: string;
+    /** Si se indica, verifica que is_master coincida exactamente. */
+    requiredIsMaster?: boolean;
     primary: string;
     primaryDark: string;
     primaryLight: string;
@@ -41,7 +45,13 @@ const LoginBase = ({ config }: LoginBaseProps) => {
     const handleLogin = (e: React.FormEvent) => {
         e.preventDefault();
         if (email.trim() && password.trim()) {
-            login(email.trim(), password, config.apiEndpoint);
+            login(
+                email.trim(),
+                password,
+                config.apiEndpoint,
+                config.requiredAccountType,
+                config.requiredIsMaster,
+            );
         }
     };
 

@@ -66,6 +66,8 @@ export default function Gerentes() {
             canEdit={canModify}
             canDelete={canModify}
             getEntityName={(row) => `${row.first_name} ${row.last_name}`}
+            showDetail={true}
+            entityTypeLabel="Gerente"
         />
     );
 }

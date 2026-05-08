@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { GridColDef } from "@mui/x-data-grid";
 import Gestion from "../components/Gestion";
+import LinkPanel from "../components/LinkPanel";
 import { useGetQuery } from "../shared/api/functions";
 import { useAuth } from "../shared/auth/authContext";
 import { generateRoleSchema } from "../shared/api/schemas/validation";
@@ -129,6 +130,22 @@ export default function Roles() {
             getEntityName={(row) => row.name}
             entityTypeLabel="Rol"
             fieldsConfig={fieldsConfig}
+            renderLinkPanel={(row) => (
+                <LinkPanel
+                    title="Usuarios asignados a este rol"
+                    session={session!}
+                    listEndpoint={`roles/${row.id}/users`}
+                    linkedIdField="user_id"
+                    addMode="body"
+                    addEndpoint={`roles/${row.id}/users`}
+                    addBodyKey="user_id"
+                    removeEndpoint={`roles/${row.id}/users`}
+                    allItemsEndpoint="users/?limit=100"
+                    getItemLabel={(item) =>
+                        `${item.first_name ?? ""} ${item.last_name ?? ""}`.trim()
+                    }
+                />
+            )}
         />
     );
 }

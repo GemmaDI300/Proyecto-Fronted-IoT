@@ -7,8 +7,9 @@ const LoginUsuarioControlIndustrial = () => (
             serviceBadge: "Control Industrial",
             emailPlaceholder: "user1.ind@iot-platform.local",
             warning:
-                "Sesión única: Solo una sesión activa permitida (409 Conflict). Usa POST /logout antes de reloguear.",
-            apiEndpoint: "auth/login",
+                "Acceso exclusivo para Usuarios. Sesión única: Solo una sesión activa permitida (409 Conflict). Usa POST /logout antes de reloguear.",
+            apiEndpoint: "auth-rc/user/login",
+            requiredAccountType: "user",
             primary: "#7c3aed",
             primaryDark: "#6d28d9",
             primaryLight: "#ede9fe",
@@ -19,3 +20,4 @@ const LoginUsuarioControlIndustrial = () => (
 );
 
 export default LoginUsuarioControlIndustrial;
+

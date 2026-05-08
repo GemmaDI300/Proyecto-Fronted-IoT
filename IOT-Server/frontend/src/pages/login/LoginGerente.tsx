@@ -6,8 +6,9 @@ const LoginGerente = () => (
             badge: "Gerente (Manager)",
             emailPlaceholder: "gerente@iot-platform.local",
             warning:
-                "Sesión única: Solo una sesión activa permitida (409 Conflict). Usa POST /logout antes de reloguear.",
-            apiEndpoint: "auth/login",
+                "Acceso exclusivo para Gerentes. Sesión única: Solo una sesión activa permitida (409 Conflict). Usa POST /logout antes de reloguear.",
+            apiEndpoint: "auth-rc/manager/login",
+            requiredAccountType: "manager",
             primary: "#059669",
             primaryDark: "#047857",
             primaryLight: "#d1fae5",
@@ -18,3 +19,4 @@ const LoginGerente = () => (
 );
 
 export default LoginGerente;
+

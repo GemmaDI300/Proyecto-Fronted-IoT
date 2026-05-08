@@ -46,9 +46,8 @@ services:
       args:
         # URL relativa: nginx hace proxy al backend
         VITE_API_BASE_URL: /api/v1/
-        # Credenciales RC — generadas al crear la Application en setup mode
-        VITE_APP_APPLICATION_ID: "00cc9e54b352407fa81e62b173798aec"
-        VITE_APP_API_KEY: "256b8b912178fd27e20955765afb716c555e2e166735a0230e67371d47adb290"
+        VITE_APP_APPLICATION_ID: "8a60188e-19dd-448c-8a7c-e71fe7675b5a"
+        VITE_APP_API_KEY: "d9cce4be9b580930687ed9e9d308c0bd3c75fe4b1cbc4fa5d9dc358f501eae39"
         VITE_APP_SERVER_KEY: "8269a34f97e745a6c2b7df5be5184f76f878f647d356cfe46a10bf0022c680d4"
     container_name: iot-frontend
     ports:

@@ -243,5 +243,30 @@ export interface EcosystemTicketResponse {
     updated_at: string;
 }
 
+// --- Vinculaciones (link join-table responses) ---
+export interface ManagerServiceResponse {
+    id: string;
+    manager_id: string;
+    service_id: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface DeviceServiceResponse {
+    id: string;
+    device_id: string;
+    service_id: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface UserRoleResponse {
+    id: string;
+    user_id: string;
+    role_id: string;
+    created_at: string;
+    updated_at: string;
+}
+
 // Tipo genérico con id opcional — compatible con index signature de DataGrid
 export type GenericDataWithId = { id?: string; [key: string]: unknown };

@@ -271,10 +271,20 @@ export const isSafeEmail = (email: string): boolean => {
  * @param data - Datos del backend
  * @returns Datos sanitizados
  */
-export const sanitizeBackendResponse = <T extends Record<string, unknown>>(data: T): T => {
+export const sanitizeBackendResponse = <T>(data: T): T => {
     if (!data || typeof data !== 'object') return data;
-    
-    const sanitized = { ...data };
+
+    // Arrays must be handled before the object spread — spreading an array into {}
+    // turns it into { "0": item0, "1": item1, ... } which breaks every .map() caller.
+    if (Array.isArray(data)) {
+        return (data as unknown[]).map((item) =>
+            typeof item === 'object' && item !== null
+                ? sanitizeBackendResponse(item as Record<string, unknown>)
+                : item
+        ) as unknown as T;
+    }
+
+    const sanitized = { ...(data as Record<string, unknown>) } as Record<string, unknown>;
     
     for (const key in sanitized) {
         const value = sanitized[key];
@@ -287,25 +297,21 @@ export const sanitizeBackendResponse = <T extends Record<string, unknown>>(data:
             // Remueve event handlers inline (onclick, onerror, etc)
             cleaned = cleaned.replace(/\son\w+\s*=\s*["'][^"']*["']/gi, '');
             
-            sanitized[key] = cleaned as T[Extract<keyof T, string>];
+            sanitized[key] = cleaned;
         }
-        
+
         // Recursión para objetos anidados
         else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-            sanitized[key] = sanitizeBackendResponse(value as Record<string, unknown>) as T[Extract<keyof T, string>];
+            sanitized[key] = sanitizeBackendResponse(value as Record<string, unknown>);
         }
-        
+
         // Recursión para arrays
         else if (Array.isArray(value)) {
-            sanitized[key] = value.map(item => 
-                typeof item === 'object' && item !== null
-                    ? sanitizeBackendResponse(item as Record<string, unknown>)
-                    : item
-            ) as T[Extract<keyof T, string>];
+            sanitized[key] = sanitizeBackendResponse(value);
         }
     }
-    
-    return sanitized;
+
+    return sanitized as unknown as T;
 };
 
 /**

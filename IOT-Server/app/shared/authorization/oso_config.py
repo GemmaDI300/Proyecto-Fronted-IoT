@@ -4,14 +4,18 @@ from oso import Oso
 from app.shared.authorization.models import CurrentUser
 from app.database.model import (
     Device,
+    Role,
     User,
     Administrator,
     Manager,
-    Role,
     Service,
     Application,
     ServiceTicket,
     EcosystemTicket,
+    Payment,           
+    PaymentHistory,    
+    SubscriptionType,  
+    UserService,   
 )
 
 
@@ -23,15 +27,14 @@ def init_oso() -> Oso:
     
     oso.register_class(CurrentUser)
     oso.register_class(Device)
+    oso.register_class(Role)
     oso.register_class(User)
     oso.register_class(Administrator)
     oso.register_class(Manager)
     oso.register_class(Service)
-    oso.register_class(Role)
     oso.register_class(Application)
     oso.register_class(ServiceTicket)
     oso.register_class(EcosystemTicket)
-    oso.register_class(ServiceTicket, name="Ticket")
     
     policy_dir = Path(__file__).parent
     policy_file = policy_dir / "policies.polar"
